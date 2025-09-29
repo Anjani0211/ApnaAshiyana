@@ -157,41 +157,12 @@ VITE_API_URL=http://localhost:5000/api
 4. **Manage Bookings** → Review and respond to requests
 5. **Analytics** → View property performance
 
-## 🎨 Design System
-
-### Color Palette
-- Primary: Dark Blue (#1e40af)
-- Secondary: White (#ffffff)
-- Accent: Black (#000000)
-- Success: Green (#10b981)
-- Warning: Yellow (#f59e0b)
-- Error: Red (#ef4444)
-
 ### Key Features
 - **No Broker Policy**: Direct owner-tenant connection
 - **Complete Transparency**: Verified property details
 - **Legal Agreement Support**: Standardized rental agreements
 - **Ranchi-Specific**: Location-based search and features
 
-## 🚀 Deployment
 
-### Frontend
-Deploy to any static hosting service:
-- Vercel
-- Netlify
-- AWS S3 + CloudFront
-
-### Backend
-Deploy to any Node.js hosting service:
-- Heroku
-- AWS EC2
-- DigitalOcean
-- Railway
-
-## 📝 License
-
-This project is proprietary software for Kirayedar rental platform.
-
----
 
 **Kirayedar** - Making rental experiences transparent, trustworthy, and hassle-free in Ranchi! 🏠✨
