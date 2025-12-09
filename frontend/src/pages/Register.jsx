@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { HomeIcon, UserIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline';
+import { HomeIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
-import { USER_TYPES } from '../constants';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -11,8 +10,7 @@ const Register = () => {
     email: '',
     phone: '',
     password: '',
-    confirmPassword: '',
-    userType: 'renter'
+    confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -82,17 +80,12 @@ const Register = () => {
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
-        password: formData.password,
-        userType: formData.userType
+        password: formData.password
       });
       
       if (result.success) {
-        // Redirect based on user type
-        if (formData.userType === 'renter') {
-          navigate('/renter/dashboard');
-        } else {
-          navigate('/rentowner/dashboard');
-        }
+        // Redirect to dashboard
+        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -102,86 +95,117 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-12 h-12 bg-primary-600 rounded-lg flex items-center justify-center">
-            <HomeIcon className="w-8 h-8 text-white" />
+    <div className="min-h-screen bg-earth-50 earth-texture flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute top-20 right-10 w-64 h-64 bg-ochre-300/20 rounded-full blur-3xl"
+          animate={{ 
+            scale: [1, 1.2, 1],
+            x: [0, -50, 0],
+            y: [0, 30, 0]
+          }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-20 left-10 w-80 h-80 bg-terracotta-400/20 rounded-full blur-3xl"
+          animate={{ 
+            scale: [1, 1.3, 1],
+            x: [0, 40, 0],
+            y: [0, -50, 0]
+          }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        />
           </div>
-        </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Create your account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+
+      <div className="relative sm:mx-auto sm:w-full sm:max-w-md z-10">
+        <motion.div
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="flex justify-center mb-6"
+        >
+          <motion.div 
+            className="relative w-16 h-16 bg-gradient-to-br from-terracotta-600 to-ochre-600 rounded-2xl flex items-center justify-center shadow-2xl"
+            whileHover={{ rotateY: 15, rotateX: 5, scale: 1.1 }}
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            <HomeIcon className="w-10 h-10 text-white" />
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
+          </motion.div>
+        </motion.div>
+        <motion.h2 
+          className="text-center text-4xl font-black text-gray-900 mb-2"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          style={{
+            textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          }}
+        >
+          Create your <span className="text-transparent bg-clip-text bg-gradient-to-r from-terracotta-600 to-ochre-600">account</span>
+        </motion.h2>
+        <motion.p 
+          className="text-center text-sm text-gray-600 font-medium"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
           Join Kirayedar - Your trusted rental platform
-        </p>
+        </motion.p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+      <motion.div 
+        className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <motion.div 
+          className="bg-white py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 border-2 border-earth-100"
+          whileHover={{ y: -2 }}
+          style={{
+            transformStyle: 'preserve-3d',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.05)',
+          }}
+        >
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* User Type Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                I want to
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {USER_TYPES.map((type) => (
-                  <motion.button
-                    key={type.value}
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setFormData(prev => ({ ...prev, userType: type.value }))}
-                    className={`p-4 border-2 rounded-lg text-left transition-all duration-200 ${
-                      formData.userType === type.value
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      {type.value === 'renter' ? (
-                        <UserIcon className="w-6 h-6" />
-                      ) : (
-                        <BuildingOffice2Icon className="w-6 h-6" />
-                      )}
-                      <div>
-                        <div className="font-medium">{type.label}</div>
-                        <div className="text-xs text-gray-500">{type.description}</div>
-                      </div>
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="name" className="block text-sm font-bold text-gray-700 mb-2">
                 Full Name
               </label>
               <div className="mt-1">
-                <input
+                <motion.input
                   id="name"
                   name="name"
                   type="text"
                   required
                   value={formData.name}
                   onChange={handleInputChange}
-                  className={`appearance-none block w-full px-3 py-2 border rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${
-                    errors.name ? 'border-red-300' : 'border-gray-300'
+                  whileFocus={{ scale: 1.02 }}
+                  className={`appearance-none block w-full px-4 py-3 border-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 sm:text-sm transition-all duration-200 ${
+                    errors.name ? 'border-red-400' : 'border-earth-200'
                   }`}
                   placeholder="Enter your full name"
                 />
-                {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+                {errors.name && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 text-sm text-red-600 font-medium"
+                  >
+                    {errors.name}
+                  </motion.p>
+                )}
               </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-bold text-gray-700 mb-2">
                 Email address
               </label>
               <div className="mt-1">
-                <input
+                <motion.input
                   id="email"
                   name="email"
                   type="email"
@@ -189,75 +213,111 @@ const Register = () => {
                   required
                   value={formData.email}
                   onChange={handleInputChange}
-                  className={`appearance-none block w-full px-3 py-2 border rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${
-                    errors.email ? 'border-red-300' : 'border-gray-300'
+                  whileFocus={{ scale: 1.02 }}
+                  className={`appearance-none block w-full px-4 py-3 border-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 sm:text-sm transition-all duration-200 ${
+                    errors.email ? 'border-red-400' : 'border-earth-200'
                   }`}
                   placeholder="Enter your email"
                 />
-                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+                {errors.email && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 text-sm text-red-600 font-medium"
+                  >
+                    {errors.email}
+                  </motion.p>
+                )}
               </div>
             </div>
 
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="phone" className="block text-sm font-bold text-gray-700 mb-2">
                 Phone Number
               </label>
               <div className="mt-1">
-                <input
+                <motion.input
                   id="phone"
                   name="phone"
                   type="tel"
                   required
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className={`appearance-none block w-full px-3 py-2 border rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${
-                    errors.phone ? 'border-red-300' : 'border-gray-300'
+                  whileFocus={{ scale: 1.02 }}
+                  className={`appearance-none block w-full px-4 py-3 border-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 sm:text-sm transition-all duration-200 ${
+                    errors.phone ? 'border-red-400' : 'border-earth-200'
                   }`}
                   placeholder="Enter your phone number"
                 />
-                {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
+                {errors.phone && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 text-sm text-red-600 font-medium"
+                  >
+                    {errors.phone}
+                  </motion.p>
+                )}
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-bold text-gray-700 mb-2">
                 Password
               </label>
               <div className="mt-1">
-                <input
+                <motion.input
                   id="password"
                   name="password"
                   type="password"
                   required
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={`appearance-none block w-full px-3 py-2 border rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${
-                    errors.password ? 'border-red-300' : 'border-gray-300'
+                  whileFocus={{ scale: 1.02 }}
+                  className={`appearance-none block w-full px-4 py-3 border-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 sm:text-sm transition-all duration-200 ${
+                    errors.password ? 'border-red-400' : 'border-earth-200'
                   }`}
                   placeholder="Create a password"
                 />
-                {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
+                {errors.password && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 text-sm text-red-600 font-medium"
+                  >
+                    {errors.password}
+                  </motion.p>
+                )}
               </div>
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="confirmPassword" className="block text-sm font-bold text-gray-700 mb-2">
                 Confirm Password
               </label>
               <div className="mt-1">
-                <input
+                <motion.input
                   id="confirmPassword"
                   name="confirmPassword"
                   type="password"
                   required
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className={`appearance-none block w-full px-3 py-2 border rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${
-                    errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                  whileFocus={{ scale: 1.02 }}
+                  className={`appearance-none block w-full px-4 py-3 border-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 sm:text-sm transition-all duration-200 ${
+                    errors.confirmPassword ? 'border-red-400' : 'border-earth-200'
                   }`}
                   placeholder="Confirm your password"
                 />
-                {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
+                {errors.confirmPassword && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 text-sm text-red-600 font-medium"
+                  >
+                    {errors.confirmPassword}
+                  </motion.p>
+                )}
               </div>
             </div>
 
@@ -265,9 +325,12 @@ const Register = () => {
               <motion.button
                 type="submit"
                 disabled={loading}
-                whileHover={{ scale: loading ? 1 : 1.02 }}
-                whileTap={{ scale: loading ? 1 : 0.98 }}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{ scale: loading ? 1 : 1.05, y: loading ? 0 : -2 }}
+                whileTap={{ scale: loading ? 1 : 0.95 }}
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-2xl text-base font-bold text-white bg-gradient-to-r from-terracotta-600 to-terracotta-700 hover:from-terracotta-700 hover:to-terracotta-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-terracotta-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                style={{
+                  boxShadow: '0 8px 24px rgba(194, 65, 12, 0.4)',
+                }}
               >
                 {loading ? 'Creating Account...' : 'Create Account'}
               </motion.button>
@@ -278,14 +341,14 @@ const Register = () => {
             <div className="text-center">
               <span className="text-sm text-gray-600">
                 Already have an account?{' '}
-                <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
+                <Link to="/login" className="font-bold text-terracotta-600 hover:text-terracotta-700 transition-colors">
                   Sign in
                 </Link>
               </span>
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 };

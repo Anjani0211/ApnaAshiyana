@@ -12,7 +12,7 @@ const {
 
 const router = express.Router({ mergeParams: true });
 
-const { protect, authorize } = require('../middlewares/auth');
+const { protect } = require('../middlewares/auth');
 
 // Public routes
 router.get('/', getReviews);
@@ -25,7 +25,7 @@ router.delete('/:id', protect, deleteReview);
 router.put('/:id/respond', protect, addOwnerResponse);
 router.put('/:id/like', protect, likeReview);
 
-// Admin only routes
-router.put('/:id/verify', protect, authorize('admin'), verifyReview);
+// Admin routes (now accessible to all authenticated users)
+router.put('/:id/verify', protect, verifyReview);
 
 module.exports = router;

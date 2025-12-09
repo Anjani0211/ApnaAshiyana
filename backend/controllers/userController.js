@@ -9,18 +9,28 @@ const User = require('../models/userModel');
 // @route   POST /api/users/register
 // @access  Public
 exports.registerUser = asyncHandler(async (req, res, next) => {
-  const { name, email, phone, password, role } = req.body;
+  const { name, email, phone, password } = req.body;
 
+  // Check total user count to determine if this is one of the first 5 users
+  const totalUsers = await User.countDocuments();
+  const isFirstFive = totalUsers < 5;
+  
   // Create user
   const user = await User.create({
     name,
     email,
     phone,
     password,
-    role: role || 'user',
     // Auto-verify user for development
     isVerified: true,
-    isIdVerified: true // Also auto-verify ID for easier testing
+    isIdVerified: true, // Also auto-verify ID for easier testing
+    registrationOrder: totalUsers + 1,
+    // First 5 users get free premium access
+    hasPaid: isFirstFive,
+    ...(isFirstFive && {
+      paymentDate: new Date(),
+      paymentId: 'first-five-free'
+    })
   });
 
   // NOTE: Email verification disabled for development
@@ -33,7 +43,7 @@ exports.registerUser = asyncHandler(async (req, res, next) => {
   try {
     // No email sending in development
     
-    sendTokenResponse(user, 201, res, {
+    await     await sendTokenResponse(user, 201, res, {
       message: 'User registered successfully. Your account is automatically verified for development.'
     });
   } catch (err) {
@@ -70,33 +80,116 @@ exports.loginUser = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Invalid credentials', 401));
   }
 
-  sendTokenResponse(user, 200, res);
+  await sendTokenResponse(user, 200, res);
 });
 
-// @desc    Log user out / clear cookie
+// @desc    Log user out / clear cookies and refresh token
 // @route   GET /api/users/logout
 // @access  Private
 exports.logoutUser = asyncHandler(async (req, res, next) => {
+  // Clear refresh token from database
+  if (req.user) {
+    req.user.refreshToken = undefined;
+    req.user.refreshTokenExpire = undefined;
+    await req.user.save({ validateBeforeSave: false });
+  }
+
+  // Clear cookies
   res.cookie('token', 'none', {
     expires: new Date(Date.now() + 10 * 1000),
-    httpOnly: true
+    httpOnly: true,
+    sameSite: 'strict'
+  });
+  
+  res.cookie('refreshToken', 'none', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+    sameSite: 'strict'
   });
 
   res.status(200).json({
     success: true,
-    data: {}
+    message: 'Logged out successfully'
   });
 });
 
-// @desc    Get current logged in user
+// @desc    Refresh access token
+// @route   POST /api/users/refresh-token
+// @access  Public
+exports.refreshToken = asyncHandler(async (req, res, next) => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+  if (!refreshToken) {
+    return next(new ErrorResponse('Refresh token not provided', 401));
+  }
+
+  // Hash the refresh token
+  const hashedRefreshToken = crypto
+    .createHash('sha256')
+    .update(refreshToken)
+    .digest('hex');
+
+  // Find user with valid refresh token
+  const user = await User.findOne({
+    refreshToken: hashedRefreshToken,
+    refreshTokenExpire: { $gt: Date.now() }
+  });
+
+  if (!user) {
+    return next(new ErrorResponse('Invalid or expired refresh token', 401));
+  }
+
+  // Generate new access token
+  const newToken = user.getSignedJwtToken();
+
+  // Set new token in cookie
+  const tokenOptions = {
+    expires: new Date(
+      Date.now() + (process.env.JWT_COOKIE_EXPIRE || 1) * 24 * 60 * 60 * 1000
+    ),
+    httpOnly: true,
+    sameSite: 'strict'
+  };
+
+  if (process.env.NODE_ENV === 'production') {
+    tokenOptions.secure = true;
+  }
+
+  res
+    .cookie('token', newToken, tokenOptions)
+    .status(200)
+    .json({
+      success: true,
+      token: newToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        hasPaid: user.hasPaid,
+        paymentDate: user.paymentDate,
+        registrationOrder: user.registrationOrder,
+        isVerified: user.isVerified,
+        isIdVerified: user.isIdVerified
+      }
+    });
+});
+
+// @desc    Get current logged in user - always from database
 // @route   GET /api/users/me
 // @access  Private
 exports.getMe = asyncHandler(async (req, res, next) => {
-  const user = await User.findById(req.user.id);
+  // Always fetch fresh from database - never trust client state
+  const user = await User.findById(req.user.id).select('-password -refreshToken');
+
+  if (!user) {
+    return next(new ErrorResponse('User not found', 404));
+  }
 
   res.status(200).json({
     success: true,
-    data: user
+    data: user,
+    user: user // Also include in user field for compatibility
   });
 });
 
@@ -136,7 +229,7 @@ exports.updatePassword = asyncHandler(async (req, res, next) => {
   user.password = req.body.newPassword;
   await user.save();
 
-  sendTokenResponse(user, 200, res);
+  await sendTokenResponse(user, 200, res);
 });
 
 // @desc    Forgot password
@@ -210,7 +303,7 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
   user.resetPasswordExpire = undefined;
   await user.save();
 
-  sendTokenResponse(user, 200, res);
+  await sendTokenResponse(user, 200, res);
 });
 
 // @desc    Verify email
@@ -312,6 +405,71 @@ exports.getUser = asyncHandler(async (req, res, next) => {
 // @desc    Verify user ID
 // @route   PUT /api/users/:id/verify-id
 // @access  Private/Admin
+// @desc    Add property to favorites
+// @route   POST /api/users/favorites/:propertyId
+// @access  Private
+exports.addToFavorites = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.user.id);
+  const propertyId = req.params.propertyId;
+
+  if (!user.favorites.includes(propertyId)) {
+    user.favorites.push(propertyId);
+    await user.save();
+  }
+
+  res.status(200).json({
+    success: true,
+    data: user.favorites
+  });
+});
+
+// @desc    Remove property from favorites
+// @route   DELETE /api/users/favorites/:propertyId
+// @access  Private
+exports.removeFromFavorites = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.user.id);
+  const propertyId = req.params.propertyId;
+
+  user.favorites = user.favorites.filter(
+    fav => fav.toString() !== propertyId.toString()
+  );
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    data: user.favorites
+  });
+});
+
+// @desc    Get user favorites
+// @route   GET /api/users/favorites
+// @access  Private
+exports.getFavorites = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.user.id).populate('favorites');
+  
+  res.status(200).json({
+    success: true,
+    data: user.favorites || []
+  });
+});
+
+// @desc    Check if property is in favorites
+// @route   GET /api/users/favorites/:propertyId
+// @access  Private
+exports.checkFavorite = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.user.id);
+  const propertyId = req.params.propertyId;
+  
+  const isFavorite = user.favorites.some(
+    fav => fav.toString() === propertyId.toString()
+  );
+
+  res.status(200).json({
+    success: true,
+    isFavorite
+  });
+});
+
 exports.verifyUserId = asyncHandler(async (req, res, next) => {
   const user = await User.findById(req.params.id);
 

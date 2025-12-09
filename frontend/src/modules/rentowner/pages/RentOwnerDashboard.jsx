@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   PlusIcon,
@@ -22,13 +23,13 @@ import { propertyService } from '../../../services/propertyService';
 import { bookingService } from '../../../services/bookingService';
 
 const RentOwnerDashboard = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('properties');
   const [properties, setProperties] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [stats, setStats] = useState({
     totalProperties: 0,
     activeBookings: 0,
-    totalRevenue: 0,
     occupancyRate: 0
   });
   const [loading, setLoading] = useState(false);
@@ -42,129 +43,138 @@ const RentOwnerDashboard = () => {
     try {
       setLoading(true);
       
-      // Mock data for demo - replace with actual API calls
-      const mockProperties = [
-        {
-          id: 1,
-          title: '2BHK Apartment near BIT Mesra',
-          type: 'apartment',
-          rent: 12000,
-          deposit: 24000,
-          location: 'Mesra, Ranchi',
-          area: 'mesra',
-          image: '/images/apartment-placeholder.svg',
-          verified: true,
-          description: 'Beautiful 2BHK apartment located in the heart of Mesra',
-          status: 'available',
-          views: 45,
-          bookings: 3,
-          createdAt: '2024-01-01'
-        },
-        {
-          id: 2,
-          title: 'Cozy PG Room in Bariatu',
-          type: 'pg',
-          rent: 5000,
-          deposit: 10000,
-          location: 'Bariatu, Ranchi',
-          area: 'bariatu',
-          image: '/images/apartment-placeholder.svg',
-          verified: true,
-          description: 'Comfortable PG accommodation with all facilities',
-          status: 'occupied',
-          views: 32,
-          bookings: 1,
-          createdAt: '2024-01-05'
-        }
-      ];
+      // Fetch user's properties
+      const propertiesResponse = await propertyService.getUserProperties();
+      const propertiesData = propertiesResponse.data || propertiesResponse || [];
+      
+      // Transform backend data to frontend format
+      const formattedProperties = propertiesData.map(property => ({
+        id: property._id || property.id,
+        title: property.title,
+        type: property.propertyType,
+        rent: property.rent,
+        deposit: property.deposit,
+        location: property.address ? `${property.address.area || ''}, ${property.address.city || 'Ranchi'}` : 'Ranchi',
+        area: property.address?.area || '',
+        image: property.images && property.images.length > 0 
+          ? (property.images[0].startsWith('http') || property.images[0].startsWith('/')
+              ? property.images[0]
+              : `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}/uploads/properties/${property.images[0]}`)
+          : '/images/apartment-placeholder.svg',
+        images: property.images || [],
+        verified: property.isVerified || false,
+        description: property.description,
+        status: property.isAvailable ? 'available' : 'occupied',
+        views: 0, // TODO: Add views tracking
+        bookings: 0, // TODO: Add bookings count
+        createdAt: property.createdAt
+      }));
+      
+      setProperties(formattedProperties);
 
-      const mockBookings = [
-        {
-          id: 1,
+      // Fetch booking requests for owner
+      try {
+        const bookingsResponse = await bookingService.getMyRequests();
+        const bookingsData = bookingsResponse.data || bookingsResponse || [];
+        
+        // Transform backend data to frontend format
+        const formattedBookings = bookingsData.map(booking => ({
+          id: booking._id || booking.id,
           property: {
-            id: 1,
-            title: '2BHK Apartment near BIT Mesra',
-            image: '/images/apartment-placeholder.svg'
+            id: booking.property?._id || booking.property?.id,
+            title: booking.property?.title || 'Unknown Property',
+            image: booking.property?.images && booking.property.images.length > 0 
+              ? booking.property.images[0] 
+              : '/images/apartment-placeholder.svg'
           },
           tenant: {
-            name: 'Rajesh Kumar',
-            phone: '+91 9876543210',
-            email: 'rajesh@example.com'
+            name: booking.tenant?.name || 'Unknown',
+            phone: booking.tenant?.phone || '',
+            email: booking.tenant?.email || ''
           },
-          status: 'pending',
-          requestedDate: '2024-01-15',
-          moveInDate: '2024-02-01',
-          message: 'Interested in this property for my studies at BIT Mesra.'
-        },
-        {
-          id: 2,
-          property: {
-            id: 2,
-            title: 'Cozy PG Room in Bariatu',
-            image: '/images/apartment-placeholder.svg'
-          },
-          tenant: {
-            name: 'Priya Sharma',
-            phone: '+91 9876543211',
-            email: 'priya@example.com'
-          },
-          status: 'approved',
-          requestedDate: '2024-01-10',
-          moveInDate: '2024-01-20',
-          message: 'Looking for PG accommodation near my workplace.'
-        }
-      ];
-
-      const mockStats = {
-        totalProperties: 2,
-        activeBookings: 2,
-        totalRevenue: 17000,
-        occupancyRate: 50
-      };
-
-      setProperties(mockProperties);
-      setBookings(mockBookings);
-      setStats(mockStats);
-
-      // const propertiesResponse = await propertyService.getUserProperties();
-      // const bookingsResponse = await bookingService.getPropertyBookings();
-      // const statsResponse = await propertyService.getUserStats();
+          status: booking.status || 'pending',
+          requestedDate: booking.requestDate || booking.createdAt,
+          moveInDate: booking.moveInDate,
+          message: booking.message || ''
+        }));
+        
+        setBookings(formattedBookings);
+        
+        // Calculate stats
+        const activeBookings = formattedBookings.filter(b => b.status === 'pending' || b.status === 'approved').length;
+        const occupiedProperties = formattedProperties.filter(p => p.status === 'occupied').length;
+        const occupancyRate = formattedProperties.length > 0 
+          ? Math.round((occupiedProperties / formattedProperties.length) * 100) 
+          : 0;
+        
+        setStats({
+          totalProperties: formattedProperties.length,
+          activeBookings: activeBookings,
+          occupancyRate: occupancyRate
+        });
+      } catch (bookingError) {
+        console.error('Error loading bookings:', bookingError);
+        setBookings([]);
+        // Still calculate stats from properties
+        const occupiedProperties = formattedProperties.filter(p => p.status === 'occupied').length;
+        const occupancyRate = formattedProperties.length > 0 
+          ? Math.round((occupiedProperties / formattedProperties.length) * 100) 
+          : 0;
+        
+        setStats({
+          totalProperties: formattedProperties.length,
+          activeBookings: 0,
+          occupancyRate: occupancyRate
+        });
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
+      // Show error to user
+      setProperties([]);
+      setBookings([]);
+      setStats({
+        totalProperties: 0,
+        activeBookings: 0,
+        occupancyRate: 0
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleViewDetails = (propertyId) => {
-    window.location.href = `/properties/${propertyId}`;
+    navigate(`/properties/${propertyId}`);
   };
 
   const handleEditProperty = (propertyId) => {
-    window.location.href = `/properties/edit/${propertyId}`;
+    navigate(`/properties/edit/${propertyId}`);
   };
 
   const handleDeleteProperty = async (propertyId) => {
     if (window.confirm('Are you sure you want to delete this property?')) {
       try {
-        // await propertyService.deleteProperty(propertyId);
+        await propertyService.deleteProperty(propertyId);
         setProperties(prev => prev.filter(p => p.id !== propertyId));
-        console.log('Property deleted successfully');
+        // Reload dashboard data
+        loadDashboardData();
       } catch (error) {
         console.error('Error deleting property:', error);
+        alert('Error deleting property. Please try again.');
       }
     }
   };
 
   const handleBookingStatusUpdate = async (bookingId, status) => {
     try {
-      // await bookingService.updateBookingStatus(bookingId, status);
+      await bookingService.updateBookingStatus(bookingId, status);
       setBookings(prev => prev.map(booking => 
         booking.id === bookingId ? { ...booking, status } : booking
       ));
-      console.log('Booking status updated successfully');
+      // Reload dashboard data to update stats
+      loadDashboardData();
     } catch (error) {
       console.error('Error updating booking status:', error);
+      alert('Error updating booking status. Please try again.');
     }
   };
 
@@ -211,7 +221,7 @@ const RentOwnerDashboard = () => {
               </p>
             </div>
             <button
-              onClick={() => setShowAddProperty(true)}
+              onClick={() => navigate('/rentowner/properties/add')}
               className="btn-primary flex items-center"
             >
               <PlusIcon className="w-5 h-5 mr-2" />
@@ -225,12 +235,11 @@ const RentOwnerDashboard = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
         >
           {[
             { label: 'Total Properties', value: stats.totalProperties, icon: HomeIcon, color: 'text-blue-600' },
             { label: 'Active Bookings', value: stats.activeBookings, icon: CalendarIcon, color: 'text-green-600' },
-            { label: 'Monthly Revenue', value: `₹${stats.totalRevenue.toLocaleString()}`, icon: CurrencyRupeeIcon, color: 'text-purple-600' },
             { label: 'Occupancy Rate', value: `${stats.occupancyRate}%`, icon: ChartBarIcon, color: 'text-orange-600' }
           ].map((stat, index) => {
             const Icon = stat.icon;
@@ -310,12 +319,21 @@ const RentOwnerDashboard = () => {
                         animate={{ opacity: 1, y: 0 }}
                         className="card overflow-hidden"
                       >
-                        <div className="relative">
+                        <div className="relative group">
                           <img
                             src={property.image}
                             alt={property.title}
-                            className="w-full h-48 object-cover"
+                            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              e.target.src = '/images/apartment-placeholder.svg';
+                            }}
                           />
+                          {property.verified && (
+                            <div className="absolute top-2 left-2 bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full flex items-center">
+                              <CheckCircleIcon className="w-3 h-3 mr-1" />
+                              Verified
+                            </div>
+                          )}
                           <div className="absolute top-2 right-2 flex space-x-2">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center ${getStatusColor(property.status)}`}>
                               <StatusIcon className="w-3 h-3 mr-1" />
@@ -517,19 +535,19 @@ const RentOwnerDashboard = () => {
                 </div>
 
                 <div className="card p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Revenue Overview</h4>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Property Overview</h4>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Total Properties</span>
                       <span className="font-semibold">{stats.totalProperties}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Monthly Revenue</span>
-                      <span className="font-semibold text-green-600">₹{stats.totalRevenue.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
                       <span className="text-gray-600">Occupancy Rate</span>
                       <span className="font-semibold text-blue-600">{stats.occupancyRate}%</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Active Bookings</span>
+                      <span className="font-semibold text-green-600">{stats.activeBookings}</span>
                     </div>
                   </div>
                 </div>

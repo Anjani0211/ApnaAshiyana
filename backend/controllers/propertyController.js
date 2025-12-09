@@ -1,13 +1,51 @@
 const path = require('path');
+const fs = require('fs').promises;
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middlewares/async');
 const Property = require('../models/propertyModel');
+const { uploadBufferToCloudinary, isCloudinaryConfigured } = require('../utils/cloudinary');
+const geocoder = require('../utils/geocoder');
 
 // @desc    Get all properties
 // @route   GET /api/properties
 // @access  Public
 exports.getProperties = asyncHandler(async (req, res, next) => {
-  res.status(200).json(res.advancedResults);
+  const results = res.advancedResults;
+  
+  // Check if user has paid - hide owner contact info if not paid
+  const userHasPaid = req.user?.hasPaid || false;
+  
+  // If user hasn't paid, remove owner contact info and address details from results
+  if (!userHasPaid && results.data) {
+    results.data = results.data.map(property => {
+      const propertyObj = property.toObject ? property.toObject() : property;
+      if (propertyObj.owner) {
+        propertyObj.owner = {
+          ...propertyObj.owner,
+          phone: undefined,
+          email: undefined
+        };
+      }
+      // Hide exact address, keep only area
+      if (propertyObj.address) {
+        propertyObj.address = {
+          area: propertyObj.address.area,
+          city: propertyObj.address.city
+          // Don't include street, pincode, or exact location
+        };
+      }
+      // Hide exact coordinates
+      if (propertyObj.location) {
+        propertyObj.location = {
+          type: propertyObj.location.type
+          // Don't include coordinates
+        };
+      }
+      return propertyObj;
+    });
+  }
+  
+  res.status(200).json(results);
 });
 
 // @desc    Get single property
@@ -25,9 +63,39 @@ exports.getProperty = asyncHandler(async (req, res, next) => {
     );
   }
 
+  // Increment view count
+  property.views = (property.views || 0) + 1;
+  await property.save();
+
+  // Check if user has paid - hide contact info if not paid
+  const userHasPaid = req.user?.hasPaid || false;
+  
+  const propertyData = property.toObject();
+  
+  // Hide owner contact info and exact location if user hasn't paid
+  if (!userHasPaid) {
+    if (propertyData.owner) {
+      propertyData.owner.phone = undefined;
+      propertyData.owner.email = undefined;
+    }
+    // Hide exact address details, keep only area and city
+    if (propertyData.address) {
+      propertyData.address = {
+        area: propertyData.address.area,
+        city: propertyData.address.city
+        // Don't include street, pincode
+      };
+    }
+    // Hide exact coordinates
+    if (propertyData.location && propertyData.location.coordinates) {
+      propertyData.location.coordinates = undefined;
+    }
+  }
+
   res.status(200).json({
     success: true,
-    data: property
+    data: propertyData,
+    userHasPaid: userHasPaid
   });
 });
 
@@ -48,6 +116,16 @@ exports.createProperty = asyncHandler(async (req, res, next) => {
     );
   }
 
+  // Check if user has paid (required for listing)
+  if (!req.user.hasPaid) {
+    return next(
+      new ErrorResponse(
+        'Payment required. Please make a payment to list properties',
+        403
+      )
+    );
+  }
+
   // Check if user is ID verified for property listing
   if (!req.user.isIdVerified) {
     return next(
@@ -57,6 +135,8 @@ exports.createProperty = asyncHandler(async (req, res, next) => {
       )
     );
   }
+
+  // Property is created and available for viewing
 
   const property = await Property.create(req.body);
 
@@ -151,20 +231,24 @@ exports.propertyImageUpload = asyncHandler(async (req, res, next) => {
     );
   }
 
-  if (!req.files) {
+  if (!req.files || !req.files.images) {
     return next(new ErrorResponse(`Please upload a file`, 400));
   }
 
   const files = req.files.images;
+  const useCloudinary = isCloudinaryConfigured();
   
   // Make sure the uploaded file is an image
   if (!Array.isArray(files)) {
-    if (!files.mimetype.startsWith('image')) {
+    // Single file upload
+    const file = files;
+    
+    if (!file.mimetype.startsWith('image')) {
       return next(new ErrorResponse(`Please upload an image file`, 400));
     }
 
     // Check filesize
-    if (files.size > process.env.MAX_FILE_UPLOAD) {
+    if (file.size > process.env.MAX_FILE_UPLOAD) {
       return next(
         new ErrorResponse(
           `Please upload an image less than ${process.env.MAX_FILE_UPLOAD / 1000000}MB`,
@@ -173,30 +257,55 @@ exports.propertyImageUpload = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // Create custom filename
-    files.name = `property_${property._id}_${Date.now()}${path.parse(files.name).ext}`;
+    try {
+      if (useCloudinary) {
+        // Upload to Cloudinary
+        const cloudinaryResult = await uploadBufferToCloudinary(
+          file.buffer,
+          file.originalname,
+          `kirayedar/properties/${property._id}`
+        );
+        
+        await Property.findByIdAndUpdate(req.params.id, {
+          $push: { images: cloudinaryResult.url }
+        });
 
-    files.mv(`${process.env.FILE_UPLOAD_PATH}/properties/${files.name}`, async err => {
-      if (err) {
-        console.error(err);
-        return next(new ErrorResponse(`Problem with file upload`, 500));
+        res.status(200).json({
+          success: true,
+          data: cloudinaryResult.url,
+          cloudinary: true
+        });
+      } else {
+        // Fallback to local storage
+        const fileName = `property_${property._id}_${Date.now()}${path.parse(file.originalname).ext}`;
+        const uploadPath = `${process.env.FILE_UPLOAD_PATH}/properties/${fileName}`;
+        
+        // Ensure directory exists
+        const dirPath = `${process.env.FILE_UPLOAD_PATH}/properties`;
+        await fs.mkdir(dirPath, { recursive: true });
+        
+        await fs.writeFile(uploadPath, file.buffer);
+        
+        await Property.findByIdAndUpdate(req.params.id, {
+          $push: { images: fileName }
+        });
+
+        res.status(200).json({
+          success: true,
+          data: fileName,
+          cloudinary: false
+        });
       }
-
-      await Property.findByIdAndUpdate(req.params.id, {
-        $push: { images: files.name }
-      });
-
-      res.status(200).json({
-        success: true,
-        data: files.name
-      });
-    });
+    } catch (error) {
+      console.error('Upload error:', error);
+      return next(new ErrorResponse(`Problem with file upload: ${error.message}`, 500));
+    }
   } else {
     // Handle multiple files
-    const uploadPromises = [];
-    const fileNames = [];
+    let imageUrls = [];
 
-    files.forEach(file => {
+    // Validate all files first
+    for (const file of files) {
       if (!file.mimetype.startsWith('image')) {
         return next(new ErrorResponse(`Please upload image files only`, 400));
       }
@@ -209,40 +318,80 @@ exports.propertyImageUpload = asyncHandler(async (req, res, next) => {
           )
         );
       }
-
-      // Create custom filename
-      file.name = `property_${property._id}_${Date.now()}_${fileNames.length}${path.parse(file.name).ext}`;
-      fileNames.push(file.name);
-
-      uploadPromises.push(
-        new Promise((resolve, reject) => {
-          file.mv(`${process.env.FILE_UPLOAD_PATH}/properties/${file.name}`, err => {
-            if (err) {
-              console.error(err);
-              reject(err);
-            } else {
-              resolve();
-            }
-          });
-        })
-      );
-    });
+    }
 
     try {
-      await Promise.all(uploadPromises);
-      await Property.findByIdAndUpdate(req.params.id, {
-        $push: { images: { $each: fileNames } }
-      });
+      if (useCloudinary) {
+        // Upload all to Cloudinary in parallel for faster uploads
+        const uploadPromises = files.map(file => 
+          uploadBufferToCloudinary(
+            file.buffer,
+            file.originalname,
+            `kirayedar/properties/${property._id}`
+          )
+        );
+        
+        const cloudinaryResults = await Promise.all(uploadPromises);
+        imageUrls = cloudinaryResults.map(result => result.url);
+        
+        await Property.findByIdAndUpdate(req.params.id, {
+          $push: { images: { $each: imageUrls } }
+        });
 
-      res.status(200).json({
-        success: true,
-        count: fileNames.length,
-        data: fileNames
-      });
-    } catch (err) {
-      return next(new ErrorResponse(`Problem with file upload`, 500));
+        res.status(200).json({
+          success: true,
+          count: imageUrls.length,
+          data: imageUrls,
+          cloudinary: true
+        });
+      } else {
+        // Fallback to local storage
+        const dirPath = `${process.env.FILE_UPLOAD_PATH}/properties`;
+        await fs.mkdir(dirPath, { recursive: true });
+        
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const fileName = `property_${property._id}_${Date.now()}_${i}${path.parse(file.originalname).ext}`;
+          const uploadPath = `${dirPath}/${fileName}`;
+          
+          await fs.writeFile(uploadPath, file.buffer);
+          imageUrls.push(fileName);
+        }
+
+        await Property.findByIdAndUpdate(req.params.id, {
+          $push: { images: { $each: imageUrls } }
+        });
+
+        res.status(200).json({
+          success: true,
+          count: imageUrls.length,
+          data: imageUrls,
+          cloudinary: false
+        });
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      return next(new ErrorResponse(`Problem with file upload: ${error.message}`, 500));
     }
   }
+});
+
+// @desc    Get current user's properties
+// @route   GET /api/properties/user
+// @access  Private
+exports.getUserProperties = asyncHandler(async (req, res, next) => {
+  const properties = await Property.find({ owner: req.user.id })
+    .populate({
+      path: 'owner',
+      select: 'name email phone isVerified isIdVerified'
+    })
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: properties.length,
+    data: properties
+  });
 });
 
 // @desc    Get properties within radius
@@ -380,6 +529,112 @@ exports.verifyProperty = asyncHandler(async (req, res, next) => {
   res.status(200).json({
     success: true,
     data: property
+  });
+});
+
+// @desc    Get featured properties (top 8 by likes, views, prime location)
+// @route   GET /api/properties/featured
+// @access  Public
+exports.getFeaturedProperties = asyncHandler(async (req, res, next) => {
+  const properties = await Property.find({
+    isAvailable: true
+  })
+    .populate({
+      path: 'owner',
+      select: 'name isVerified'
+    })
+    .sort({ 
+      createdAt: -1  // Show newest properties first
+    })
+    .limit(8); // Increased limit to show more properties
+
+  res.status(200).json({
+    success: true,
+    count: properties.length,
+    data: properties
+  });
+});
+
+// @desc    Get area-wise property counts
+// @route   GET /api/properties/area-counts
+// @access  Public
+exports.getAreaCounts = asyncHandler(async (req, res, next) => {
+  const areaCounts = await Property.aggregate([
+    {
+      $match: {
+        isAvailable: true,
+        isVerified: true
+      }
+    },
+    {
+      $group: {
+        _id: '$address.area',
+        count: { $sum: 1 },
+        properties: {
+          $push: {
+            id: '$_id',
+            title: '$title',
+            rent: '$rent',
+            location: '$location.coordinates',
+            address: '$address'
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        area: '$_id',
+        count: 1,
+        properties: 1,
+        _id: 0
+      }
+    },
+    {
+      $sort: { count: -1 }
+    }
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: areaCounts
+  });
+});
+
+// @desc    Like/Unlike a property
+// @route   PUT /api/properties/:id/like
+// @access  Private
+exports.toggleLike = asyncHandler(async (req, res, next) => {
+  const property = await Property.findById(req.params.id);
+
+  if (!property) {
+    return next(
+      new ErrorResponse(`Property not found with id of ${req.params.id}`, 404)
+    );
+  }
+
+  const userId = req.user.id;
+  const likedIndex = property.likedBy.findIndex(
+    id => id.toString() === userId.toString()
+  );
+
+  if (likedIndex > -1) {
+    // Unlike
+    property.likedBy.splice(likedIndex, 1);
+    property.likes = Math.max(0, (property.likes || 0) - 1);
+  } else {
+    // Like
+    property.likedBy.push(userId);
+    property.likes = (property.likes || 0) + 1;
+  }
+
+  await property.save();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      likes: property.likes,
+      isLiked: likedIndex === -1
+    }
   });
 });
 

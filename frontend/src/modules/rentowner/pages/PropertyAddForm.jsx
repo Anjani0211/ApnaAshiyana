@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { propertyService } from '../../../services/propertyService';
 import { toast } from 'react-toastify';
+import { uploadMultipleToCloudinary, uploadToCloudinary } from '../../../utils/cloudinary';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -31,6 +32,7 @@ const PropertyAddForm = () => {
   const [formData, setFormData] = useState({
     title: '',
     type: '',
+    category: 'entire',
     rent: '',
     deposit: '',
     location: '',
@@ -47,9 +49,9 @@ const PropertyAddForm = () => {
       parking: false,
       security: false,
       powerBackup: false,
-      waterSupply: false,
+      waterSupply: '', // String enum: '24x7', 'limited', 'tanker'
       kitchen: false,
-      bathroom: false,
+      bathroom: '', // String enum: 'attached', 'shared', 'common'
       balcony: false,
       ac: false,
       tv: false,
@@ -82,8 +84,12 @@ const PropertyAddForm = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState(''); // 'uploading', 'creating', 'complete'
   const [errors, setErrors] = useState({});
   const [mapCenter, setMapCenter] = useState([23.3441, 85.3096]); // Ranchi center
+  const [createdPropertyId, setCreatedPropertyId] = useState(null);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   const steps = [
     { id: 1, title: 'Basic Information', icon: HomeIcon },
@@ -161,11 +167,10 @@ const PropertyAddForm = () => {
         if (!formData.deposit || formData.deposit <= 0) newErrors.deposit = 'Valid deposit amount is required';
         break;
       case 2:
-        if (!formData.location.trim()) newErrors.location = 'Location is required';
         if (!formData.area) newErrors.area = 'Area is required';
-        if (!formData.street.trim()) newErrors.street = 'Street address is required';
-        if (!formData.pincode || !/^83[0-9]{4}$/.test(formData.pincode)) newErrors.pincode = 'Valid Jharkhand pincode is required';
-        if (!formData.coordinates) newErrors.coordinates = 'Please pin your property location on the map';
+        if (!formData.street || !formData.street.trim()) newErrors.street = 'Street address is required';
+        if (!formData.pincode || !/^83[0-9]{4}$/.test(formData.pincode)) newErrors.pincode = 'Valid Jharkhand pincode (83xxxx) is required';
+        if (!formData.coordinates || formData.coordinates.length !== 2) newErrors.coordinates = 'Please pin your property location on the map';
         break;
       case 3:
         if (!formData.description.trim()) newErrors.description = 'Description is required';
@@ -179,6 +184,51 @@ const PropertyAddForm = () => {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  // Validate all steps before submission
+  const validateAllSteps = () => {
+    const allErrors = {};
+    let hasErrors = false;
+    
+    // Validate each step
+    for (let step = 1; step <= steps.length; step++) {
+      const stepErrors = {};
+      
+      switch (step) {
+        case 1:
+          if (!formData.title.trim()) stepErrors.title = 'Property title is required';
+          if (!formData.type) stepErrors.type = 'Property type is required';
+          if (!formData.rent || formData.rent <= 0 || isNaN(formData.rent)) stepErrors.rent = 'Valid rent amount is required';
+          if (!formData.deposit || formData.deposit <= 0 || isNaN(formData.deposit)) stepErrors.deposit = 'Valid deposit amount is required';
+          break;
+        case 2:
+          if (!formData.area) stepErrors.area = 'Area is required';
+          if (!formData.street || !formData.street.trim()) stepErrors.street = 'Street address is required';
+          if (!formData.pincode || !/^83[0-9]{4}$/.test(formData.pincode)) stepErrors.pincode = 'Valid Jharkhand pincode (83xxxx) is required';
+          if (!formData.coordinates || !Array.isArray(formData.coordinates) || formData.coordinates.length !== 2) {
+            stepErrors.coordinates = 'Please pin your property location on the map';
+          }
+          break;
+        case 3:
+          if (!formData.description.trim()) stepErrors.description = 'Description is required';
+          if (!formData.bedrooms || formData.bedrooms === '') stepErrors.bedrooms = 'Number of bedrooms is required';
+          if (!formData.bathrooms || formData.bathrooms === '') stepErrors.bathrooms = 'Number of bathrooms is required';
+          break;
+        case 4:
+          if (!formData.images || formData.images.length === 0) stepErrors.images = 'At least one image is required';
+          break;
+      }
+      
+      // Merge step errors into allErrors
+      Object.assign(allErrors, stepErrors);
+      if (Object.keys(stepErrors).length > 0) {
+        hasErrors = true;
+      }
+    }
+    
+    setErrors(allErrors);
+    return { isValid: !hasErrors, errors: allErrors };
   };
 
   const handleNext = () => {
@@ -197,11 +247,12 @@ const PropertyAddForm = () => {
     useMapEvents({
       click: (e) => {
         const { lat, lng } = e.latlng;
+        // Store as [lng, lat] for GeoJSON format (backend expects this)
         setFormData(prev => ({
           ...prev,
-          coordinates: [lat, lng]
+          coordinates: [lng, lat]
         }));
-        setMapCenter([lat, lng]);
+        setMapCenter([lat, lng]); // Leaflet uses [lat, lng]
         toast.success('Location pinned successfully!');
       }
     });
@@ -211,48 +262,278 @@ const PropertyAddForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateStep(currentStep)) {
-      toast.error('Please complete all required fields');
+    // Validate ALL steps before submission
+    const validation = validateAllSteps();
+    
+    if (!validation.isValid) {
+      // Show error message with count of errors
+      const errorCount = Object.keys(validation.errors).length;
+      toast.error(`Please fix ${errorCount} error${errorCount > 1 ? 's' : ''} before submitting`, {
+        autoClose: 5000,
+        position: 'top-center'
+      });
+      
+      // Scroll to first error field
+      const firstErrorField = Object.keys(validation.errors)[0];
+      if (firstErrorField) {
+        const errorElement = document.querySelector(`[name="${firstErrorField}"]`) || 
+                           document.querySelector(`#${firstErrorField}`) ||
+                           document.querySelector(`.error-${firstErrorField}`);
+        if (errorElement) {
+          errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          errorElement.focus();
+        } else {
+          // If field not found, scroll to top of form
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+      
+      // Navigate to the step with the first error
+      if (validation.errors.title || validation.errors.type || validation.errors.rent || validation.errors.deposit) {
+        setCurrentStep(1);
+      } else if (validation.errors.area || validation.errors.street || validation.errors.pincode || validation.errors.coordinates) {
+        setCurrentStep(2);
+      } else if (validation.errors.description || validation.errors.bedrooms || validation.errors.bathrooms) {
+        setCurrentStep(3);
+      } else if (validation.errors.images) {
+        setCurrentStep(4);
+      }
+      
+      return; // Stop submission
+    }
+    
+    // Additional validation for data types
+    if (isNaN(parseInt(formData.rent)) || parseInt(formData.rent) <= 0) {
+      setErrors(prev => ({ ...prev, rent: 'Valid rent amount is required' }));
+      toast.error('Please enter a valid rent amount');
+      setCurrentStep(1);
+      return;
+    }
+    
+    if (isNaN(parseInt(formData.deposit)) || parseInt(formData.deposit) <= 0) {
+      setErrors(prev => ({ ...prev, deposit: 'Valid deposit amount is required' }));
+      toast.error('Please enter a valid deposit amount');
+      setCurrentStep(1);
+      return;
+    }
+    
+    if (!formData.bedrooms || isNaN(parseInt(formData.bedrooms)) || parseInt(formData.bedrooms) < 0) {
+      setErrors(prev => ({ ...prev, bedrooms: 'Number of bedrooms is required' }));
+      toast.error('Please enter a valid number of bedrooms');
+      setCurrentStep(3);
+      return;
+    }
+    
+    if (!formData.bathrooms || isNaN(parseInt(formData.bathrooms)) || parseInt(formData.bathrooms) < 0) {
+      setErrors(prev => ({ ...prev, bathrooms: 'Number of bathrooms is required' }));
+      toast.error('Please enter a valid number of bathrooms');
+      setCurrentStep(3);
+      return;
+    }
+    
+    // Validate coordinates
+    if (!formData.coordinates || !Array.isArray(formData.coordinates) || formData.coordinates.length !== 2) {
+      setErrors(prev => ({ ...prev, coordinates: 'Please pin your property location on the map' }));
+      toast.error('Please pin your property location on the map');
+      setCurrentStep(2);
+      return;
+    }
+    
+    // Validate images
+    if (!formData.images || formData.images.length === 0) {
+      setErrors(prev => ({ ...prev, images: 'At least one image is required' }));
+      toast.error('Please upload at least one image');
+      setCurrentStep(4);
       return;
     }
     
     try {
       setLoading(true);
+      setUploadProgress(0);
+      setUploadStatus('uploading');
       
       // Prepare form data for submission
       const submitData = {
-        ...formData,
+        title: formData.title,
+        propertyType: formData.type,
+        category: formData.category || 'entire', // Default category
         rent: parseInt(formData.rent),
         deposit: parseInt(formData.deposit),
         bedrooms: parseInt(formData.bedrooms),
         bathrooms: parseInt(formData.bathrooms),
-        city: 'Ranchi',
-        state: 'Jharkhand',
-        verified: false,
-        status: 'available'
+        furnishingStatus: formData.furnished || 'unfurnished',
+        description: formData.description,
+        availableFrom: formData.availableFrom,
+        location: {
+          type: 'Point',
+          coordinates: formData.coordinates || [85.3096, 23.3441] // [lng, lat] - Ranchi default
+        },
+        address: {
+          street: formData.street,
+          area: formData.area,
+          pincode: formData.pincode,
+          landmark: formData.landmark || '',
+          city: 'Ranchi',
+          state: 'Jharkhand'
+        },
+        amenities: (() => {
+          const amenitiesObj = { ...formData.amenities };
+          // Remove empty strings for waterSupply and bathroom (backend expects valid enum or undefined)
+          if (!amenitiesObj.waterSupply || amenitiesObj.waterSupply === '') {
+            delete amenitiesObj.waterSupply;
+          }
+          if (!amenitiesObj.bathroom || amenitiesObj.bathroom === '') {
+            delete amenitiesObj.bathroom;
+          }
+          return amenitiesObj;
+        })(),
+        rules: formData.rules,
+        nearbyPlaces: formData.nearbyPlaces,
+        isAvailable: true,
+        isVerified: false
       };
       
-      // Convert images to base64 for now (in production, upload to cloud storage)
-      const imagePromises = formData.images.map(image => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.readAsDataURL(image.file);
-        });
-      });
+      // Upload images - try Cloudinary first, fallback to backend
+      let imageUrls = [];
+      if (formData.images.length > 0) {
+        setUploadStatus('uploading');
+        setUploadProgress(10);
+        
+        const files = formData.images.map(img => img.file);
+        const totalFiles = files.length;
+        let useBackendUpload = false;
+        
+        // Try Cloudinary first if configured
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+        if (cloudName && cloudName !== 'your-cloud-name') {
+          try {
+            toast.info(`Uploading ${totalFiles} images to Cloudinary...`);
+            setUploadProgress(10);
+            
+            // Upload all images in parallel for faster upload
+            const uploadPromises = files.map((file, index) => {
+              return uploadToCloudinary(file).then(result => {
+                // Update progress for each completed upload
+                const progress = 10 + ((index + 1) * 70 / totalFiles);
+                setUploadProgress(Math.min(progress, 80));
+                return result.url;
+              });
+            });
+            
+            // Wait for all uploads to complete
+            imageUrls = await Promise.all(uploadPromises);
+            setUploadProgress(80);
+            toast.success(`${totalFiles} images uploaded successfully!`);
+          } catch (uploadError) {
+            console.warn('Cloudinary upload failed, falling back to backend upload:', uploadError);
+            toast.warning('Cloudinary upload failed, using backend upload...');
+            useBackendUpload = true;
+            imageUrls = []; // Reset
+          }
+        } else {
+          // Cloudinary not configured, use backend
+          useBackendUpload = true;
+        }
+        
+        // Fallback to backend upload
+        if (useBackendUpload) {
+          toast.info(`Uploading ${totalFiles} images via backend...`);
+          setUploadProgress(20);
+          
+          // Create property first to get ID
+          const tempSubmitData = { ...submitData };
+          delete tempSubmitData.images; // Remove images temporarily
+          
+          try {
+            const tempResponse = await propertyService.createProperty(tempSubmitData);
+            const propertyId = tempResponse.data._id || tempResponse.data.id;
+            
+            setUploadProgress(40);
+            
+            // Upload images via backend (all at once - multer handles multiple files)
+            const formDataForImages = new FormData();
+            files.forEach((file) => {
+              formDataForImages.append('images', file);
+            });
+            
+            // Upload with progress tracking
+            toast.info('Uploading images... This may take a moment for large files.');
+            await propertyService.uploadImages(propertyId, formDataForImages);
+            setUploadProgress(85);
+            
+            // Fetch updated property to get image URLs
+            const updatedProperty = await propertyService.getPropertyById(propertyId);
+            imageUrls = updatedProperty.data?.images || updatedProperty.images || [];
+            setUploadProgress(90);
+            
+            // Property created successfully with images
+            setUploadProgress(100);
+            setUploadStatus('complete');
+            toast.success('Property created successfully!');
+            
+            // Navigate to dashboard after a short delay
+            setTimeout(() => {
+              navigate('/dashboard');
+            }, 1500);
+            return;
+          } catch (error) {
+            console.error('Backend upload error:', error);
+            // If upload fails but property was created, we should still handle it
+            if (error.response?.status !== 400 && error.response?.status !== 404) {
+              throw error; // Re-throw to be caught by outer catch
+            }
+            // If property creation failed, throw error
+            throw error;
+          }
+        }
+      }
       
-      const imageDataUrls = await Promise.all(imagePromises);
-      submitData.imageUrls = imageDataUrls;
+      // Add image URLs to submit data
+      if (imageUrls.length > 0) {
+        submitData.images = imageUrls;
+      }
       
-      // Save to database
-      await propertyService.createProperty(submitData);
+      // Create the property with image URLs
+      setUploadStatus('creating');
+      setUploadProgress(85);
       
-      toast.success('Property added successfully!');
-      navigate('/rentowner/dashboard');
+      const response = await propertyService.createProperty(submitData);
+      const propertyId = response.data._id || response.data.id;
+      
+      setUploadProgress(100);
+      setUploadStatus('complete');
+      
+      toast.success('Property created successfully!');
+      navigate('/dashboard');
       
     } catch (error) {
       console.error('Error creating property:', error);
-      toast.error('Error creating property. Please try again.');
+      
+      // Show specific error message
+      let errorMessage = 'Error creating property. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error?.message) {
+        errorMessage = error.response.data.error.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      // Check for common errors
+      if (errorMessage.includes('Cloudinary') || errorMessage.includes('cloud name') || errorMessage.includes('upload preset')) {
+        errorMessage += '. Please configure Cloudinary credentials in your .env file.';
+      }
+      
+      toast.error(errorMessage, {
+        autoClose: 5000,
+        position: 'top-center'
+      });
+      
+      setUploadProgress(0);
+      setUploadStatus('');
     } finally {
       setLoading(false);
     }
@@ -289,9 +570,24 @@ const PropertyAddForm = () => {
                 <option value="pg">PG</option>
                 <option value="flat">Flat</option>
                 <option value="house">House</option>
-                <option value="apartment">Apartment</option>
+                <option value="hostel">Hostel</option>
               </select>
               {errors.type && <p className="text-red-500 text-sm mt-1">{errors.type}</p>}
+            </div>
+
+            <div>
+              <label className="label">Category *</label>
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleInputChange}
+                className="input"
+              >
+                <option value="student">Student</option>
+                <option value="family">Family</option>
+                <option value="shared">Shared</option>
+                <option value="entire">Entire Property</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -427,7 +723,7 @@ const PropertyAddForm = () => {
                   />
                   <MapClickHandler />
                   {formData.coordinates && (
-                    <Marker position={formData.coordinates}>
+                    <Marker position={[formData.coordinates[1], formData.coordinates[0]]}>
                       <div className="p-2">
                         <p className="font-semibold text-sm">Your Property</p>
                         <p className="text-xs text-gray-600">{formData.title || 'Property Location'}</p>
@@ -444,7 +740,7 @@ const PropertyAddForm = () => {
                     <span className="text-green-800 font-medium">Location pinned successfully!</span>
                   </div>
                   <p className="text-green-700 text-sm mt-1">
-                    Coordinates: {formData.coordinates[0].toFixed(6)}, {formData.coordinates[1].toFixed(6)}
+                    Coordinates: {formData.coordinates[1].toFixed(6)} (lat), {formData.coordinates[0].toFixed(6)} (lng)
                   </p>
                 </div>
               )}
@@ -525,19 +821,53 @@ const PropertyAddForm = () => {
 
             <div>
               <label className="label">Amenities</label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {Object.entries(formData.amenities).map(([key, value]) => (
-                  <label key={key} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name={`amenities.${key}`}
-                      checked={value}
-                      onChange={handleInputChange}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mr-2"
-                    />
-                    <span className="text-sm text-gray-700 capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
-                  </label>
-                ))}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                {Object.entries(formData.amenities)
+                  .filter(([key]) => key !== 'waterSupply' && key !== 'bathroom')
+                  .map(([key, value]) => (
+                    <label key={key} className="flex items-center p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        name={`amenities.${key}`}
+                        checked={value}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mr-2"
+                      />
+                      <span className="text-sm text-gray-700 capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                    </label>
+                  ))}
+              </div>
+
+              {/* Water Supply - Special dropdown */}
+              <div className="mb-4">
+                <label className="label">Water Supply</label>
+                <select
+                  name="amenities.waterSupply"
+                  value={formData.amenities.waterSupply}
+                  onChange={handleInputChange}
+                  className="input"
+                >
+                  <option value="">Select Water Supply</option>
+                  <option value="24x7">24x7 Available</option>
+                  <option value="limited">Limited Hours</option>
+                  <option value="tanker">Tanker Supply</option>
+                </select>
+              </div>
+
+              {/* Bathroom Type - Special dropdown */}
+              <div>
+                <label className="label">Bathroom Type</label>
+                <select
+                  name="amenities.bathroom"
+                  value={formData.amenities.bathroom}
+                  onChange={handleInputChange}
+                  className="input"
+                >
+                  <option value="">Select Bathroom Type</option>
+                  <option value="attached">Attached Bathroom</option>
+                  <option value="shared">Shared Bathroom</option>
+                  <option value="common">Common Bathroom</option>
+                </select>
               </div>
             </div>
           </div>
@@ -705,7 +1035,7 @@ const PropertyAddForm = () => {
                   {loading ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Creating...
+                      {uploadStatus === 'uploading' ? 'Uploading...' : uploadStatus === 'creating' ? 'Creating...' : 'Processing...'}
                     </>
                   ) : (
                     <>
@@ -717,6 +1047,41 @@ const PropertyAddForm = () => {
               )}
             </div>
           </form>
+
+          {/* Unlock Payment Modal */}
+
+          {/* Upload Progress Modal */}
+          {loading && uploadStatus && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+                <div className="text-center mb-6">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary-600 mx-auto mb-4"></div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    {uploadStatus === 'uploading' && 'Uploading Images'}
+                    {uploadStatus === 'creating' && 'Creating Property'}
+                    {uploadStatus === 'complete' && 'Complete!'}
+                  </h3>
+                  <p className="text-gray-600">
+                    {uploadStatus === 'uploading' && 'Please wait while we upload your property images to Cloudinary...'}
+                    {uploadStatus === 'creating' && 'Saving your property details to the database...'}
+                    {uploadStatus === 'complete' && 'Your property has been successfully created!'}
+                  </p>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+                  <div
+                    className="bg-primary-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+                
+                <div className="text-center text-sm text-gray-500">
+                  {uploadProgress}% Complete
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

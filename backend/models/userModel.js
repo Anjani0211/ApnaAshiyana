@@ -27,10 +27,19 @@ const UserSchema = new mongoose.Schema({
       'Please add a valid 10-digit phone number'
     ]
   },
-  role: {
-    type: String,
-    enum: ['user', 'owner', 'admin'],
-    default: 'user'
+  hasPaid: {
+    type: Boolean,
+    default: false
+  },
+  paymentDate: {
+    type: Date
+  },
+  paymentId: {
+    type: String
+  },
+  registrationOrder: {
+    type: Number,
+    default: null
   },
   password: {
     type: String,
@@ -46,6 +55,9 @@ const UserSchema = new mongoose.Schema({
   verificationTokenExpire: Date,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
+  refreshToken: String,
+  refreshTokenExpire: Date,
+  lastLogin: Date,
   createdAt: {
     type: Date,
     default: Date.now
@@ -88,10 +100,26 @@ UserSchema.pre('save', async function(next) {
 // Sign JWT and return
 UserSchema.methods.getSignedJwtToken = function() {
   return jwt.sign(
-    { id: this._id, role: this.role },
+    { id: this._id },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE }
+    { expiresIn: process.env.JWT_EXPIRE || '1d' }
   );
+};
+
+// Generate refresh token
+UserSchema.methods.getRefreshToken = function() {
+  const refreshToken = crypto.randomBytes(40).toString('hex');
+  
+  // Hash token and set to refreshToken field
+  this.refreshToken = crypto
+    .createHash('sha256')
+    .update(refreshToken)
+    .digest('hex');
+  
+  // Set expire (30 days)
+  this.refreshTokenExpire = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  
+  return refreshToken;
 };
 
 // Match user entered password to hashed password in database

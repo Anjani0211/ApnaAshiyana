@@ -106,6 +106,16 @@ const PropertySchema = new mongoose.Schema({
     type: Number,
     required: [true, 'Please add security deposit amount']
   },
+  bedrooms: {
+    type: Number,
+    default: 0,
+    min: [0, 'Bedrooms cannot be negative']
+  },
+  bathrooms: {
+    type: Number,
+    default: 0,
+    min: [0, 'Bathrooms cannot be negative']
+  },
   availableFrom: {
     type: Date,
     required: [true, 'Please add availability date'],
@@ -193,6 +203,22 @@ const PropertySchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  views: {
+    type: Number,
+    default: 0
+  },
+  likes: {
+    type: Number,
+    default: 0
+  },
+  likedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  isPrimeLocation: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -208,36 +234,55 @@ const PropertySchema = new mongoose.Schema({
 
 // Geocode & create location field
 PropertySchema.pre('save', async function(next) {
+  // Skip geocoding if address hasn't changed
   if (!this.isModified('address')) {
-    next();
+    return next();
   }
   
+  // Check if geocoder API key is configured
+  const apiKey = process.env.GEOCODER_API_KEY;
+  const hasValidApiKey = apiKey && apiKey !== 'YOUR_API_KEY' && apiKey.trim().length > 0;
+  
+  // If no valid API key, use default coordinates
+  if (!hasValidApiKey) {
+    this.location = {
+      type: 'Point',
+      coordinates: [85.3096, 23.3441], // Default Ranchi coordinates [lng, lat]
+      formattedAddress: `${this.address.area || 'Ranchi'}, Ranchi, Jharkhand`
+    };
+    return next();
+  }
+  
+  // Try geocoding if API key is valid
   try {
     const fullAddress = `${this.address.street}, ${this.address.area}, ${this.address.city}, ${this.address.state} ${this.address.pincode}`;
     const loc = await geocoder.geocode(fullAddress);
     
-    this.location = {
-      type: 'Point',
-      coordinates: [loc[0].longitude, loc[0].latitude],
-      formattedAddress: loc[0].formattedAddress
-    };
-    
-    // Set default coordinates for Ranchi if geocoding fails
-    if (!this.location.coordinates || this.location.coordinates.length !== 2) {
-      // Default to Ranchi center coordinates
+    if (loc && loc.length > 0 && loc[0].longitude && loc[0].latitude) {
       this.location = {
         type: 'Point',
-        coordinates: [85.3096, 23.3441], // Ranchi coordinates
-        formattedAddress: `${this.address.area}, Ranchi, Jharkhand`
+        coordinates: [loc[0].longitude, loc[0].latitude],
+        formattedAddress: loc[0].formattedAddress || `${this.address.area}, Ranchi, Jharkhand`
+      };
+    } else {
+      // If geocoding returns empty results, use default
+      this.location = {
+        type: 'Point',
+        coordinates: [85.3096, 23.3441],
+        formattedAddress: `${this.address.area || 'Ranchi'}, Ranchi, Jharkhand`
       };
     }
   } catch (err) {
-    console.error('Geocoding error:', err);
+    // Silently fail and use default coordinates - don't log errors for missing/invalid API keys
+    // Only log if it's a different type of error
+    if (err.message && !err.message.includes('AppKey') && !err.message.includes('invalid')) {
+      console.error('Geocoding error:', err.message);
+    }
     // Set default Ranchi coordinates
     this.location = {
       type: 'Point',
-      coordinates: [85.3096, 23.3441],
-      formattedAddress: `${this.address.area}, Ranchi, Jharkhand`
+      coordinates: [85.3096, 23.3441], // Default Ranchi coordinates [lng, lat]
+      formattedAddress: `${this.address.area || 'Ranchi'}, Ranchi, Jharkhand`
     };
   }
   

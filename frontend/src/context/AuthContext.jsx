@@ -1,5 +1,4 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import jwtDecode from 'jwt-decode';
 import { toast } from 'react-toastify';
 import api from '../utils/api';
 
@@ -18,65 +17,60 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Check if user is logged in on mount
+  // Check if user is logged in on mount - verify from server
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        
-        // Check if token is expired
-        if (decoded.exp * 1000 > Date.now()) {
-          setUser(decoded);
-          setIsAuthenticated(true);
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        } else {
-          // Token expired, remove it
-          localStorage.removeItem('token');
+    const checkAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        try {
+          // Always verify from server
+          const res = await api.get('/users/me');
+          const userData = res.data.data || res.data.user || null;
+          if (userData) {
+            setUser(userData);
+            setIsAuthenticated(true);
+            localStorage.setItem('user', JSON.stringify(userData));
+          } else {
+            throw new Error('No user data');
+          }
+        } catch (error) {
+          // Token invalid - try refresh token
+          try {
+            const refreshRes = await api.post('/users/refresh-token');
+            if (refreshRes.data.token) {
+              localStorage.setItem('token', refreshRes.data.token);
+              api.defaults.headers.common['Authorization'] = `Bearer ${refreshRes.data.token}`;
+              setUser(refreshRes.data.user);
+              setIsAuthenticated(true);
+              localStorage.setItem('user', JSON.stringify(refreshRes.data.user));
+            } else {
+              throw new Error('Refresh failed');
+            }
+          } catch (refreshError) {
+            // Both failed - clear everything
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            delete api.defaults.headers.common['Authorization'];
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Invalid token:', error);
-        localStorage.removeItem('token');
+      } else {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+    
+    checkAuth();
   }, []);
 
   // Login function
   const login = async (email, password) => {
     try {
       setLoading(true);
-      
-      // For demo purposes, simulate API call
-      if (email === 'demo@kirayedar.com' && password === 'demo123') {
-        const mockUser = {
-          id: '1',
-          name: 'Demo User',
-          email: 'demo@kirayedar.com',
-          phone: '+91 9876543210',
-          userType: 'tenant',
-          isEmailVerified: true,
-          avatar: null
-        };
-        
-        const mockToken = 'demo_token_' + Date.now();
-        
-        // Store token
-        localStorage.setItem('token', mockToken);
-        
-        // Set authorization header
-        api.defaults.headers.common['Authorization'] = `Bearer ${mockToken}`;
-        
-        // Update state
-        setUser(mockUser);
-        setIsAuthenticated(true);
-        
-        toast.success('Welcome back to Kirayedar!');
-        return { success: true };
-      }
-      
-      // Real API call would go here
-      const response = await api.post('/auth/login', {
+      const response = await api.post('/users/login', {
         email,
         password
       });
@@ -85,12 +79,21 @@ export const AuthProvider = ({ children }) => {
 
       // Store token
       localStorage.setItem('token', token);
+      if (userData) {
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+      } else {
+        // Fetch profile if backend doesn't return user in login response
+        const me = await api.get('/users/me');
+        const user = me.data.data || me.data.user;
+        localStorage.setItem('user', JSON.stringify(user));
+        setUser(user);
+      }
       
       // Set authorization header
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
       // Update state
-      setUser(userData);
       setIsAuthenticated(true);
       
       toast.success('Welcome back to Kirayedar!');
@@ -108,46 +111,26 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       setLoading(true);
-      
-      // For demo purposes, simulate API call
-      const mockUser = {
-        id: Date.now().toString(),
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        userType: userData.userType,
-        isEmailVerified: false,
-        avatar: null
-      };
-      
-      const mockToken = 'demo_token_' + Date.now();
-      
-      // Store token
-      localStorage.setItem('token', mockToken);
-      
-      // Set authorization header
-      api.defaults.headers.common['Authorization'] = `Bearer ${mockToken}`;
-      
-      // Update state
-      setUser(mockUser);
-      setIsAuthenticated(true);
-      
-      toast.success('Welcome to Kirayedar! Your account has been created successfully.');
-      return { success: true };
-      
-      // Real API call would go here
-      const response = await api.post('/auth/register', userData);
+      const response = await api.post('/users/register', userData);
 
       const { token, user: newUser } = response.data;
 
       // Store token
       localStorage.setItem('token', token);
+      if (newUser) {
+        localStorage.setItem('user', JSON.stringify(newUser));
+        setUser(newUser);
+      } else {
+        const me = await api.get('/users/me');
+        const user = me.data.data || me.data.user;
+        localStorage.setItem('user', JSON.stringify(user));
+        setUser(user);
+      }
       
       // Set authorization header
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
       // Update state
-      setUser(newUser);
       setIsAuthenticated(true);
       
       toast.success('Welcome to Kirayedar! Your account has been created successfully.');
@@ -161,28 +144,36 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout function
-  const logout = () => {
-    // Remove token from storage
-    localStorage.removeItem('token');
-    
-    // Remove authorization header
-    delete api.defaults.headers.common['Authorization'];
-    
-    // Clear state
-    setUser(null);
-    setIsAuthenticated(false);
-    
-    toast.info('You have been logged out successfully');
+  // Logout function - clear server-side session
+  const logout = async () => {
+    try {
+      // Call server to clear refresh token and session
+      await api.get('/users/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Remove token from storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Remove authorization header
+      delete api.defaults.headers.common['Authorization'];
+      
+      // Clear state
+      setUser(null);
+      setIsAuthenticated(false);
+      
+      toast.info('You have been logged out successfully');
+    }
   };
 
   // Update user profile
   const updateUser = async (userData) => {
     try {
       setLoading(true);
-      const response = await api.put('/auth/profile', userData);
+      const response = await api.put('/users/updatedetails', userData);
       
-      setUser(response.data.user);
+      setUser(response.data.data || response.data.user);
       toast.success('Profile updated successfully');
       return { success: true };
     } catch (error) {
@@ -198,7 +189,7 @@ export const AuthProvider = ({ children }) => {
   const forgotPassword = async (email) => {
     try {
       setLoading(true);
-      await api.post('/auth/forgot-password', { email });
+      await api.post('/users/forgotpassword', { email });
       toast.success('Password reset link sent to your email');
       return { success: true };
     } catch (error) {
@@ -214,7 +205,7 @@ export const AuthProvider = ({ children }) => {
   const resetPassword = async (token, password) => {
     try {
       setLoading(true);
-      await api.post(`/auth/reset-password/${token}`, { password });
+      await api.put(`/users/resetpassword/${token}`, { password });
       toast.success('Password reset successfully. You can now login with your new password.');
       return { success: true };
     } catch (error) {

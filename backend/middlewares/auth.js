@@ -1,22 +1,20 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const asyncHandler = require('./async');
 const ErrorResponse = require('../utils/errorResponse');
 const User = require('../models/userModel');
 
-// Protect routes
+// Protect routes - verifies access token server-side
 exports.protect = asyncHandler(async (req, res, next) => {
   let token;
 
   // Get token from authorization header
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    // Set token from Bearer token in header
     token = req.headers.authorization.split(' ')[1];
-    console.log('Token from Authorization header:', token);
   } 
   // Set token from cookie
   else if (req.cookies && req.cookies.token) {
     token = req.cookies.token;
-    console.log('Token from cookie:', token);
   }
 
   // Make sure token exists
@@ -25,39 +23,81 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    // Verify token
+    // Verify token server-side
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('Decoded token:', decoded);
 
-    // Add user to request object
-    req.user = await User.findById(decoded.id);
-    console.log('Found user:', req.user ? req.user._id : 'No user found');
-
-    if (!req.user) {
+    // Get user from database - always verify from DB
+    const user = await User.findById(decoded.id);
+    
+    if (!user) {
       return next(new ErrorResponse('User not found', 404));
     }
 
+    // Attach user to request - always fresh from database
+    req.user = user;
     next();
   } catch (err) {
-    console.error('Token verification error:', err.message);
+    // Token expired or invalid - try refresh token
+    if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+      // Check for refresh token
+      const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+      
+      if (refreshToken) {
+        try {
+          // Verify refresh token from database
+          const hashedRefreshToken = crypto
+            .createHash('sha256')
+            .update(refreshToken)
+            .digest('hex');
+          
+          const user = await User.findOne({
+            refreshToken: hashedRefreshToken,
+            refreshTokenExpire: { $gt: Date.now() }
+          });
+          
+          if (user) {
+            // Generate new access token
+            const newToken = user.getSignedJwtToken();
+            
+            // Set new token in cookie
+            const tokenOptions = {
+              expires: new Date(
+                Date.now() + (process.env.JWT_COOKIE_EXPIRE || 1) * 24 * 60 * 60 * 1000
+              ),
+              httpOnly: true,
+              sameSite: 'strict'
+            };
+            
+            if (process.env.NODE_ENV === 'production') {
+              tokenOptions.secure = true;
+            }
+            
+            res.cookie('token', newToken, tokenOptions);
+            req.user = user;
+            return next();
+          }
+        } catch (refreshErr) {
+          console.error('Refresh token error:', refreshErr);
+        }
+      }
+    }
+    
     return next(new ErrorResponse('Not authorized to access this route', 401));
   }
 });
 
-// Grant access to specific roles
-exports.authorize = (...roles) => {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return next(
-        new ErrorResponse(
-          `User role ${req.user.role} is not authorized to access this route`,
-          403
-        )
-      );
-    }
-    next();
-  };
-};
+// Check if user has paid for premium features
+exports.hasPaidCheck = asyncHandler(async (req, res, next) => {
+  if (!req.user.hasPaid) {
+    return next(
+      new ErrorResponse(
+        'Payment required. Please make a payment to access this feature',
+        403
+      )
+    );
+  }
+  next();
+});
 
 // Verify user is verified
 exports.verifiedOnly = asyncHandler(async (req, res, next) => {
@@ -82,5 +122,32 @@ exports.idVerifiedOnly = asyncHandler(async (req, res, next) => {
       )
     );
   }
+  next();
+});
+
+// Optional auth - sets req.user if token exists, but doesn't require it
+exports.optionalAuth = asyncHandler(async (req, res, next) => {
+  let token;
+
+  // Get token from authorization header
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  } 
+  // Set token from cookie
+  else if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  // If token exists, verify and set user
+  if (token && token !== 'none') {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id);
+    } catch (err) {
+      // Token invalid, but continue without user
+      req.user = null;
+    }
+  }
+
   next();
 });

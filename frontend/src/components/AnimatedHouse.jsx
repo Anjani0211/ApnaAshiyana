@@ -37,20 +37,23 @@ const AnimatedHouse = () => {
       variants={houseVariants}
       initial="initial"
       animate="animate"
-      className="relative w-80 h-80 mx-auto"
+      className="relative w-full h-full flex items-center justify-center"
+      style={{ width: '100%', height: '100%', minHeight: '400px' }}
     >
       <motion.svg
         animate={floatAnimation}
         viewBox="0 0 400 400"
         className="w-full h-full drop-shadow-2xl"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: '100%', maxWidth: '500px', maxHeight: '500px' }}
       >
         {/* Background Circle */}
         <motion.circle
           cx="200"
           cy="200"
           r="180"
-          fill="rgba(255, 255, 255, 0.1)"
-          stroke="rgba(255, 255, 255, 0.2)"
+          fill="rgba(255, 255, 255, 0.15)"
+          stroke="rgba(255, 255, 255, 0.3)"
           strokeWidth="2"
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
@@ -63,20 +66,24 @@ const AnimatedHouse = () => {
           y="220"
           width="160"
           height="120"
-          fill="#3b82f6"
+          fill="#ffffff"
           rx="8"
           initial={{ y: 400 }}
           animate={{ y: 220 }}
           transition={{ duration: 0.8, delay: 0.3 }}
+          stroke="rgba(255, 255, 255, 0.5)"
+          strokeWidth="2"
         />
 
         {/* Roof */}
         <motion.polygon
           points="100,220 200,160 300,220"
-          fill="#1e40af"
+          fill="#fef3c7"
           initial={{ y: -100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.5 }}
+          stroke="rgba(254, 243, 199, 0.8)"
+          strokeWidth="2"
         />
 
         {/* Chimney */}
@@ -121,11 +128,13 @@ const AnimatedHouse = () => {
           y="280"
           width="40"
           height="60"
-          fill="#8b5cf6"
+          fill="#3b82f6"
           rx="20"
           initial={{ scaleY: 0 }}
           animate={{ scaleY: 1 }}
           transition={{ duration: 0.6, delay: 0.8 }}
+          stroke="rgba(59, 130, 246, 0.8)"
+          strokeWidth="2"
         />
 
         {/* Door Handle */}
@@ -147,18 +156,20 @@ const AnimatedHouse = () => {
             y="240"
             width="30"
             height="30"
-            fill="#fef3c7"
+            fill="#fbbf24"
             rx="4"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.5, delay: 0.9 }}
+            stroke="rgba(251, 191, 36, 0.8)"
+            strokeWidth="1"
           />
           <motion.rect
             x="152"
             y="240"
             width="6"
             height="30"
-            fill="#3b82f6"
+            fill="#ffffff"
             animate={windowGlow}
           />
           <motion.rect
@@ -166,7 +177,7 @@ const AnimatedHouse = () => {
             y="252"
             width="30"
             height="6"
-            fill="#3b82f6"
+            fill="#ffffff"
             animate={windowGlow}
           />
 
@@ -176,18 +187,20 @@ const AnimatedHouse = () => {
             y="240"
             width="30"
             height="30"
-            fill="#fef3c7"
+            fill="#fbbf24"
             rx="4"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.5, delay: 1.0 }}
+            stroke="rgba(251, 191, 36, 0.8)"
+            strokeWidth="1"
           />
           <motion.rect
             x="242"
             y="240"
             width="6"
             height="30"
-            fill="#3b82f6"
+            fill="#ffffff"
             animate={windowGlow}
           />
           <motion.rect
@@ -195,7 +208,7 @@ const AnimatedHouse = () => {
             y="252"
             width="30"
             height="6"
-            fill="#3b82f6"
+            fill="#ffffff"
             animate={windowGlow}
           />
         </motion.g>

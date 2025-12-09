@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   MagnifyingGlassIcon,
@@ -12,8 +13,10 @@ const PropertySearchForm = ({
   onSearch, 
   initialValues = {},
   compact = false,
-  showQuickSearches = true 
+  showQuickSearches = true,
+  navigateOnSearch = false
 }) => {
+  const navigate = useNavigate();
   const [searchData, setSearchData] = useState({
     location: initialValues.location || '',
     propertyType: initialValues.propertyType || '',
@@ -33,7 +36,15 @@ const PropertySearchForm = ({
 
   const handleSearch = (e) => {
     e.preventDefault();
-    onSearch(searchData);
+    if (navigateOnSearch) {
+      const params = new URLSearchParams();
+      Object.keys(searchData).forEach((key) => {
+        if (searchData[key]) params.append(key, searchData[key]);
+      });
+      navigate(`/properties?${params.toString()}`);
+      return;
+    }
+    if (onSearch) onSearch(searchData);
   };
 
   const handleQuickSearch = (location, propertyType) => {
@@ -46,7 +57,15 @@ const PropertySearchForm = ({
       furnished: ''
     };
     setSearchData(quickSearchData);
-    onSearch(quickSearchData);
+    if (navigateOnSearch) {
+      const params = new URLSearchParams();
+      Object.keys(quickSearchData).forEach((key) => {
+        if (quickSearchData[key]) params.append(key, quickSearchData[key]);
+      });
+      navigate(`/properties?${params.toString()}`);
+      return;
+    }
+    if (onSearch) onSearch(quickSearchData);
   };
 
   const clearFilters = () => {
@@ -59,7 +78,11 @@ const PropertySearchForm = ({
       furnished: ''
     };
     setSearchData(clearedData);
-    onSearch(clearedData);
+    if (navigateOnSearch) {
+      navigate('/properties');
+      return;
+    }
+    if (onSearch) onSearch(clearedData);
   };
 
   return (

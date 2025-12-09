@@ -10,11 +10,7 @@ import Footer from './components/layout/Footer';
 // Landing Module
 import LandingPage from './modules/landing/pages/LandingPage';
 
-// Renter Module
-import RenterDashboard from './modules/renter/pages/RenterDashboard';
-
 // Rent Owner Module
-import RentOwnerDashboard from './modules/rentowner/pages/RentOwnerDashboard';
 import PropertyAddForm from './modules/rentowner/pages/PropertyAddForm';
 
 // Shared Pages
@@ -37,14 +33,16 @@ import NotFound from './pages/NotFound';
 
 // Context
 import { AuthProvider } from './context/AuthContext';
+import { PaymentProvider } from './context/PaymentContext';
 
-// Auth Component
+// Auth Components
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function App() {
   return (
     <AuthProvider>
-      <div className="flex flex-col min-h-screen bg-gray-50">
+      <PaymentProvider>
+      <div className="flex flex-col min-h-screen bg-earth-50 earth-texture">
         <Header />
         <main className="flex-grow">
           <ToastContainer 
@@ -77,11 +75,6 @@ function App() {
             <Route path="/privacy" element={<PrivacyPolicy />} />
             
             {/* Protected Routes */}
-            <Route path="/dashboard/*" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
             <Route path="/profile" element={
               <ProtectedRoute>
                 <Profile />
@@ -93,22 +86,10 @@ function App() {
               </ProtectedRoute>
             } />
             
-            {/* Renter Routes */}
-            <Route path="/renter/dashboard" element={
+            {/* Dashboard Route - Unified */}
+            <Route path="/dashboard" element={
               <ProtectedRoute>
-                <RenterDashboard />
-              </ProtectedRoute>
-            } />
-            
-            {/* Rent Owner Routes */}
-            <Route path="/rentowner/dashboard" element={
-              <ProtectedRoute>
-                <RentOwnerDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/rentowner/properties/add" element={
-              <ProtectedRoute>
-                <PropertyAddForm />
+                <Dashboard />
               </ProtectedRoute>
             } />
             <Route path="/properties/edit/:id" element={
@@ -123,6 +104,7 @@ function App() {
         </main>
         <Footer />
       </div>
+      </PaymentProvider>
     </AuthProvider>
   );
 }

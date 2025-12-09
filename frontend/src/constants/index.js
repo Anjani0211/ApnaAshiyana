@@ -9,24 +9,24 @@ export const PROPERTY_TYPES = [
 
 // Ranchi Areas
 export const RANCHI_AREAS = [
-  { value: 'mesra', label: 'Mesra', coordinates: [23.4067, 85.4375] },
-  { value: 'bariatu', label: 'Bariatu', coordinates: [23.3833, 85.3333] },
-  { value: 'morabadi', label: 'Morabadi', coordinates: [23.3500, 85.3167] },
-  { value: 'kanke', label: 'Kanke', coordinates: [23.4167, 85.3167] },
-  { value: 'lalpur', label: 'Lalpur', coordinates: [23.3500, 85.3500] },
-  { value: 'harmu', label: 'Harmu', coordinates: [23.3667, 85.3333] },
-  { value: 'doranda', label: 'Doranda', coordinates: [23.3500, 85.3000] },
-  { value: 'hindpiri', label: 'Hindpiri', coordinates: [23.3333, 85.3167] },
-  { value: 'kadru', label: 'Kadru', coordinates: [23.3833, 85.3000] },
-  { value: 'ratu-road', label: 'Ratu Road', coordinates: [23.4000, 85.3000] },
-  { value: 'main-road', label: 'Main Road', coordinates: [23.3500, 85.3333] },
-  { value: 'hec', label: 'HEC', coordinates: [23.3667, 85.3500] },
-  { value: 'kokar', label: 'Kokar', coordinates: [23.3333, 85.3500] },
-  { value: 'namkum', label: 'Namkum', coordinates: [23.3167, 85.3333] },
-  { value: 'tatisilwai', label: 'Tatisilwai', coordinates: [23.3000, 85.3167] },
-  { value: 'bundu', label: 'Bundu', coordinates: [23.1833, 85.5833] },
-  { value: 'angara', label: 'Angara', coordinates: [23.2500, 85.5000] },
-  { value: 'ormanjhi', label: 'Ormanjhi', coordinates: [23.4500, 85.2500] }
+  { value: 'mesra', label: 'Mesra', coordinates: [85.4375, 23.4067] }, // [lng, lat] - BIT Mesra area
+  { value: 'bariatu', label: 'Bariatu', coordinates: [85.3333, 23.3833] },
+  { value: 'morabadi', label: 'Morabadi', coordinates: [85.3167, 23.3500] },
+  { value: 'kanke', label: 'Kanke', coordinates: [85.3167, 23.4167] },
+  { value: 'lalpur', label: 'Lalpur', coordinates: [85.3500, 23.3500] },
+  { value: 'harmu', label: 'Harmu', coordinates: [85.3333, 23.3667] },
+  { value: 'doranda', label: 'Doranda', coordinates: [85.3000, 23.3500] },
+  { value: 'hindpiri', label: 'Hindpiri', coordinates: [85.3167, 23.3333] },
+  { value: 'kadru', label: 'Kadru', coordinates: [85.3000, 23.3833] },
+  { value: 'ratu-road', label: 'Ratu Road', coordinates: [85.3000, 23.4000] },
+  { value: 'main-road', label: 'Main Road', coordinates: [85.3333, 23.3500] },
+  { value: 'hec', label: 'HEC', coordinates: [85.3500, 23.3667] },
+  { value: 'kokar', label: 'Kokar', coordinates: [85.3500, 23.3333] },
+  { value: 'namkum', label: 'Namkum', coordinates: [85.3333, 23.3167] },
+  { value: 'tatisilwai', label: 'Tatisilwai', coordinates: [85.3167, 23.3000] },
+  { value: 'bundu', label: 'Bundu', coordinates: [85.5833, 23.1833] },
+  { value: 'angara', label: 'Angara', coordinates: [85.5000, 23.2500] },
+  { value: 'ormanjhi', label: 'Ormanjhi', coordinates: [85.2500, 23.4500] }
 ];
 
 // Budget Ranges
@@ -46,12 +46,6 @@ export const FURNISHING_TYPES = [
   { value: 'furnished', label: 'Furnished' },
   { value: 'semi-furnished', label: 'Semi-Furnished' },
   { value: 'unfurnished', label: 'Unfurnished' }
-];
-
-// User Types
-export const USER_TYPES = [
-  { value: 'renter', label: 'Renter', description: 'Looking for a place to rent' },
-  { value: 'owner', label: 'Property Owner', description: 'Want to list your property' }
 ];
 
 // Property Categories

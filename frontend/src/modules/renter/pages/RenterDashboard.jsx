@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   MagnifyingGlassIcon,
   MapPinIcon,
@@ -144,7 +145,7 @@ const RenterDashboard = () => {
   };
 
   const handleViewDetails = (propertyId) => {
-    window.location.href = `/properties/${propertyId}`;
+    navigate(`/properties/${propertyId}`);
   };
 
   const handleFavorite = (propertyId) => {

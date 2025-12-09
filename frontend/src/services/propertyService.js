@@ -1,5 +1,5 @@
 // Property service for all property-related operations
-import api from '../services/api';
+import api from '../utils/api';
 
 export const propertyService = {
   // Get all properties with filters
@@ -16,7 +16,9 @@ export const propertyService = {
 
   // Create new property (for rent owners)
   createProperty: async (propertyData) => {
-    const response = await api.post('/properties', propertyData);
+    const response = await api.post('/properties', propertyData, {
+      timeout: 60000 // 1 minute for property creation
+    });
     return response.data;
   },
 
@@ -47,6 +49,36 @@ export const propertyService = {
   // Get featured properties for landing page
   getFeaturedProperties: async () => {
     const response = await api.get('/properties/featured');
+    return response.data;
+  },
+
+  // Get area-wise property counts
+  getAreaCounts: async () => {
+    const response = await api.get('/properties/area-counts');
+    return response.data;
+  },
+
+  // Toggle like on property
+  toggleLike: async (propertyId) => {
+    const response = await api.put(`/properties/${propertyId}/like`);
+    return response.data;
+  },
+
+  // Upload property images
+  uploadImages: async (propertyId, formData) => {
+    const response = await api.put(`/properties/${propertyId}/images`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 300000, // 5 minutes timeout for large file uploads
+      onUploadProgress: (progressEvent) => {
+        // This will be handled by the caller if needed
+        if (progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log(`Upload progress: ${percentCompleted}%`);
+        }
+      }
+    });
     return response.data;
   }
 };

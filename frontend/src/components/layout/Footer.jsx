@@ -40,29 +40,22 @@ const Footer = () => {
 
   return (
     <footer className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white relative overflow-hidden">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}></div>
-      </div>
-
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {/* Top Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
-          {/* Company Info */}
+        {/* Main Content Grid - All in one div */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12 mb-12">
+          {/* Company Info - Left Column */}
           <div className="space-y-6">
             <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-terracotta-600 rounded-xl flex items-center justify-center">
                 <HomeIcon className="w-8 h-8 text-white" />
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white">Kirayedar</h2>
-                <p className="text-primary-300 text-sm">Your Trusted Rental Platform</p>
+                <p className="text-ochre-400 text-sm">Your Trusted Rental Platform</p>
               </div>
             </div>
             
-            <p className="text-gray-300 text-lg leading-relaxed max-w-md">
+            <p className="text-gray-300 leading-relaxed">
               Your trusted partner for finding and listing rental properties in Ranchi, Jharkhand. 
               No brokers, complete transparency, and hassle-free rental agreements.
             </p>
@@ -79,7 +72,7 @@ const Footer = () => {
                     transition={{ delay: index * 0.1 }}
                     className="flex items-center space-x-3"
                   >
-                    <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+                    <div className="w-8 h-8 bg-terracotta-600 rounded-lg flex items-center justify-center">
                       <Icon className="w-4 h-4 text-white" />
                     </div>
                     <span className="text-gray-300 font-medium">{feature.text}</span>
@@ -89,7 +82,7 @@ const Footer = () => {
             </div>
           </div>
 
-          {/* Contact Info */}
+          {/* Contact Info - Middle Column */}
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-white">Get in Touch</h3>
             <div className="space-y-4">
@@ -97,9 +90,9 @@ const Footer = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="flex items-center space-x-4 p-4 bg-white bg-opacity-5 rounded-xl hover:bg-opacity-10 transition-all duration-300"
+                className="flex items-center space-x-4 p-4 bg-slate-800 rounded-xl hover:bg-slate-700 transition-all duration-300"
               >
-                <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-terracotta-600 rounded-lg flex items-center justify-center flex-shrink-0">
                   <PhoneIcon className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -112,9 +105,9 @@ const Footer = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="flex items-center space-x-4 p-4 bg-white bg-opacity-5 rounded-xl hover:bg-opacity-10 transition-all duration-300"
+                className="flex items-center space-x-4 p-4 bg-slate-800 rounded-xl hover:bg-slate-700 transition-all duration-300"
               >
-                <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-terracotta-600 rounded-lg flex items-center justify-center flex-shrink-0">
                   <EnvelopeIcon className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -127,9 +120,9 @@ const Footer = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                className="flex items-center space-x-4 p-4 bg-white bg-opacity-5 rounded-xl hover:bg-opacity-10 transition-all duration-300"
+                className="flex items-center space-x-4 p-4 bg-slate-800 rounded-xl hover:bg-slate-700 transition-all duration-300"
               >
-                <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-terracotta-600 rounded-lg flex items-center justify-center flex-shrink-0">
                   <MapPinIcon className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -139,62 +132,59 @@ const Footer = () => {
               </motion.div>
             </div>
           </div>
-        </div>
 
-        {/* Links Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          {/* Company Links */}
-          <div>
-            <h3 className="text-lg font-bold text-white mb-6">Company</h3>
-            <ul className="space-y-3">
-              {footerLinks.company.map((link) => (
-                <li key={link.name}>
-                  <Link
-                    to={link.path}
-                    className="text-gray-300 hover:text-primary-300 transition-colors duration-200 text-sm flex items-center group"
-                  >
-                    <span className="w-2 h-2 bg-primary-600 rounded-full mr-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {/* Navigation Links - Right Column */}
+          <div className="space-y-8">
+            {/* Company Links */}
+            <div>
+              <h3 className="text-lg font-bold text-white mb-4">Company</h3>
+              <ul className="space-y-2">
+                {footerLinks.company.map((link) => (
+                  <li key={link.name}>
+                    <Link
+                      to={link.path}
+                      className="text-gray-300 hover:text-ochre-400 transition-colors duration-200"
+                    >
+                      {link.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          {/* Services */}
-          <div>
-            <h3 className="text-lg font-bold text-white mb-6">Services</h3>
-            <ul className="space-y-3">
-              {footerLinks.services.map((link) => (
-                <li key={link.name}>
-                  <Link
-                    to={link.path}
-                    className="text-gray-300 hover:text-primary-300 transition-colors duration-200 text-sm flex items-center group"
-                  >
-                    <span className="w-2 h-2 bg-primary-600 rounded-full mr-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+            {/* Services */}
+            <div>
+              <h3 className="text-lg font-bold text-white mb-4">Services</h3>
+              <ul className="space-y-2">
+                {footerLinks.services.map((link) => (
+                  <li key={link.name}>
+                    <Link
+                      to={link.path}
+                      className="text-gray-300 hover:text-ochre-400 transition-colors duration-200"
+                    >
+                      {link.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          {/* Legal */}
-          <div>
-            <h3 className="text-lg font-bold text-white mb-6">Legal</h3>
-            <ul className="space-y-3">
-              {footerLinks.legal.map((link) => (
-                <li key={link.name}>
-                  <Link
-                    to={link.path}
-                    className="text-gray-300 hover:text-primary-300 transition-colors duration-200 text-sm flex items-center group"
-                  >
-                    <span className="w-2 h-2 bg-primary-600 rounded-full mr-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {/* Legal */}
+            <div>
+              <h3 className="text-lg font-bold text-white mb-4">Legal</h3>
+              <ul className="space-y-2">
+                {footerLinks.legal.map((link) => (
+                  <li key={link.name}>
+                    <Link
+                      to={link.path}
+                      className="text-gray-300 hover:text-ochre-400 transition-colors duration-200"
+                    >
+                      {link.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 

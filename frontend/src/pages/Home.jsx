@@ -169,9 +169,11 @@ const Home = () => {
               initial={{ opacity: 0, x: 100 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.5 }}
-              className="hidden lg:flex justify-center"
+              className="w-full h-full flex items-center justify-center min-h-[400px]"
             >
-              <AnimatedHouse />
+              <div className="w-full h-full max-w-md">
+                <AnimatedHouse />
+              </div>
             </motion.div>
           </div>
         </div>

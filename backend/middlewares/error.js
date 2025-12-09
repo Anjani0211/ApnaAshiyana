@@ -27,6 +27,17 @@ const errorHandler = (err, req, res, next) => {
     error = new ErrorResponse(message, 400);
   }
 
+  // Multer errors
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      error = new ErrorResponse('File size too large', 400);
+    } else if (err.code === 'LIMIT_FILE_COUNT') {
+      error = new ErrorResponse('Too many files uploaded', 400);
+    } else {
+      error = new ErrorResponse(err.message || 'File upload error', 400);
+    }
+  }
+
   // JWT errors
   if (err.name === 'JsonWebTokenError') {
     error = new ErrorResponse('Invalid token. Please log in again.', 401);
@@ -36,9 +47,20 @@ const errorHandler = (err, req, res, next) => {
     error = new ErrorResponse('Token expired. Please log in again.', 401);
   }
 
+  // Log full error details in development
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Error details:', {
+      message: error.message,
+      statusCode: error.statusCode,
+      stack: err.stack,
+      originalError: err
+    });
+  }
+
   res.status(error.statusCode || 500).json({
     success: false,
     error: error.message || 'Server Error',
+    message: error.message || 'Server Error', // Also include as message for consistency
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
 };

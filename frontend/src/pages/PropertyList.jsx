@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePayment } from '../context/PaymentContext';
 import {
   HomeIcon,
   MapPinIcon,
   CurrencyRupeeIcon,
-  StarIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
   AdjustmentsHorizontalIcon,
@@ -14,16 +14,22 @@ import {
   HeartIcon,
   ShareIcon,
   LockClosedIcon,
-  UserPlusIcon
+  UserPlusIcon,
+  CreditCardIcon
 } from '@heroicons/react/24/outline';
 import { PROPERTY_TYPES, BUDGET_RANGES, FURNISHING_TYPES, RANCHI_AREAS } from '../constants';
 import PropertyCard from '../modules/shared/components/PropertyCard';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import EmptyState from '../components/ui/EmptyState';
+import { getRandomPropertyImages } from '../utils/images';
+import { propertyService } from '../services/propertyService';
 import { toast } from 'react-toastify';
 
 const PropertyList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const { hasPaid, handlePayment } = usePayment();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -42,118 +48,63 @@ const PropertyList = () => {
   const loadProperties = async () => {
     try {
       setLoading(true);
-      // Mock data - replace with actual API call
-      const mockProperties = [
-        {
-          id: 1,
-          title: 'Beautiful 2BHK Apartment near BIT Mesra',
-          type: 'apartment',
-          rent: 12000,
-          deposit: 24000,
-          location: 'Mesra, Ranchi',
-          area: 'mesra',
-          coordinates: [23.4067, 85.4375],
-          images: ['/images/property-1.jpg', '/images/property-2.jpg'],
-          verified: true,
-          description: 'Beautiful 2BHK apartment located in the heart of Mesra, just 5 minutes walk from BIT Mesra campus.',
-          ratings: 4.5,
-          reviews: 23,
-          bedrooms: 2,
-          bathrooms: 2,
-          furnished: 'furnished',
-          availableFrom: '2024-02-01',
-          amenities: ['wifi', 'parking', 'security', 'power_backup', 'water_supply']
-        },
-        {
-          id: 2,
-          title: 'Cozy PG Room for Students',
-          type: 'pg',
-          rent: 5000,
-          deposit: 10000,
-          location: 'Bariatu, Ranchi',
-          area: 'bariatu',
-          coordinates: [23.3833, 85.3333],
-          images: ['/images/property-3.jpg', '/images/property-4.jpg'],
-          verified: true,
-          description: 'Perfect PG accommodation for students with all modern amenities.',
-          ratings: 4.2,
-          reviews: 15,
-          bedrooms: 1,
-          bathrooms: 1,
-          furnished: 'furnished',
-          availableFrom: '2024-01-15',
-          amenities: ['wifi', 'security', 'water_supply']
-        },
-        {
-          id: 3,
-          title: 'Spacious 3BHK House in Morabadi',
-          type: 'house',
-          rent: 18000,
-          deposit: 36000,
-          location: 'Morabadi, Ranchi',
-          area: 'morabadi',
-          coordinates: [23.3500, 85.3167],
-          images: ['/images/property-5.jpg', '/images/property-6.jpg'],
-          verified: false,
-          description: 'Large family house with garden and parking space.',
-          ratings: 4.0,
-          reviews: 8,
-          bedrooms: 3,
-          bathrooms: 3,
-          furnished: 'semi-furnished',
-          availableFrom: '2024-03-01',
-          amenities: ['parking', 'garden', 'security', 'water_supply']
-        },
-        {
-          id: 4,
-          title: 'Modern Flat near Ranchi University',
-          type: 'flat',
-          rent: 15000,
-          deposit: 30000,
-          location: 'Kanke, Ranchi',
-          area: 'kanke',
-          coordinates: [23.4167, 85.3167],
-          images: ['/images/property-7.jpg', '/images/property-8.jpg'],
-          verified: true,
-          description: 'Modern flat with all amenities, perfect for working professionals.',
-          ratings: 4.7,
-          reviews: 31,
-          bedrooms: 2,
-          bathrooms: 2,
-          furnished: 'furnished',
-          availableFrom: '2024-02-15',
-          amenities: ['wifi', 'parking', 'security', 'power_backup', 'water_supply', 'gym']
+      
+      // Build API query params
+      const queryParams = {
+        isAvailable: true,
+        ...(filters.type && { propertyType: filters.type }),
+        ...(filters.area && { 'address.area': filters.area }),
+        ...(filters.budget && { rent: { $lte: parseInt(filters.budget) } }),
+        ...(filters.furnished && { furnishingStatus: filters.furnished })
+      };
+      
+      try {
+        const response = await propertyService.getProperties(queryParams);
+        const apiProperties = response.data?.data || response.data || [];
+        
+        // Transform API data and remove duplicates by ID
+        const uniquePropertiesMap = new Map();
+        
+        apiProperties.forEach(prop => {
+          const id = prop._id?.toString() || prop.id?.toString();
+          if (id && !uniquePropertiesMap.has(id)) {
+            uniquePropertiesMap.set(id, {
+              id: id,
+              title: prop.title,
+              type: prop.propertyType,
+              rent: prop.rent,
+              deposit: prop.deposit,
+              location: prop.address ? `${prop.address.area}, ${prop.address.city}` : prop.location || 'Ranchi',
+              area: prop.address?.area || prop.area,
+              coordinates: prop.location?.coordinates || [85.3096, 23.3441], // Default Ranchi
+              images: prop.images && prop.images.length > 0 ? prop.images : getRandomPropertyImages(4),
+              verified: prop.isVerified || false,
+              description: prop.description,
+              bedrooms: prop.bedrooms,
+              bathrooms: prop.bathrooms,
+              furnished: prop.furnishingStatus || 'unfurnished',
+              availableFrom: prop.availableFrom,
+              amenities: prop.amenities ? Object.keys(prop.amenities).filter(k => prop.amenities[k]) : []
+            });
+          }
+        });
+        
+        let transformedProperties = Array.from(uniquePropertiesMap.values());
+        
+        // Apply search filter if any
+        if (filters.search) {
+          transformedProperties = transformedProperties.filter(p => 
+            p.title.toLowerCase().includes(filters.search.toLowerCase()) ||
+            p.location.toLowerCase().includes(filters.search.toLowerCase())
+          );
         }
-      ];
-
-      // Apply filters
-      let filteredProperties = mockProperties;
-      
-      if (filters.type) {
-        filteredProperties = filteredProperties.filter(p => p.type === filters.type);
+        
+        setProperties(transformedProperties);
+      } catch (apiError) {
+        console.error('API error:', apiError);
+        // Fallback to empty array
+        setProperties([]);
       }
-      
-      if (filters.area) {
-        filteredProperties = filteredProperties.filter(p => p.area === filters.area);
-      }
-      
-      if (filters.budget) {
-        const budget = parseInt(filters.budget);
-        filteredProperties = filteredProperties.filter(p => p.rent <= budget);
-      }
-      
-      if (filters.furnished) {
-        filteredProperties = filteredProperties.filter(p => p.furnished === filters.furnished);
-      }
-      
-      if (filters.search) {
-        filteredProperties = filteredProperties.filter(p => 
-          p.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-          p.location.toLowerCase().includes(filters.search.toLowerCase())
-        );
-      }
-
-      setProperties(filteredProperties);
     } catch (error) {
       console.error('Error loading properties:', error);
     } finally {
@@ -184,194 +135,193 @@ const PropertyList = () => {
     setSearchParams({});
   };
 
-  const PropertyCard = ({ property }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 group"
-    >
-      <div className="relative">
-        <img
-          src={property.images[0] || '/images/property-1.jpg'}
-          alt={property.title}
-          className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-        <div className="absolute top-4 left-4">
-          {property.verified && (
-            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-              ✓ Verified
-            </span>
-          )}
-        </div>
-        <div className="absolute top-4 right-4 flex space-x-2">
-          <button 
-            onClick={() => {
-              if (!isAuthenticated) {
-                toast.info('Please sign up to save favorites');
-                navigate('/register');
-                return;
-              }
-              toast.success('Property added to favorites!');
-            }}
-            className="p-2 bg-white bg-opacity-80 rounded-full hover:bg-opacity-100 transition-all duration-200"
-          >
-            <HeartIcon className="w-4 h-4 text-gray-600" />
-          </button>
-          <button 
-            onClick={() => {
-              if (navigator.share) {
-                navigator.share({
-                  title: property.title,
-                  text: `Check out this property: ${property.title}`,
-                  url: `${window.location.origin}/properties/${property.id}`
-                }).then(() => toast.success('Property shared successfully!'))
-                  .catch((error) => toast.error('Error sharing property.'));
-              } else {
-                navigator.clipboard.writeText(`${window.location.origin}/properties/${property.id}`);
-                toast.info('Property link copied to clipboard!');
-              }
-            }}
-            className="p-2 bg-white bg-opacity-80 rounded-full hover:bg-opacity-100 transition-all duration-200"
-          >
-            <ShareIcon className="w-4 h-4 text-gray-600" />
-          </button>
-        </div>
-      </div>
-      
-      <div className="p-6">
-        <div className="flex items-start justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-primary-600 transition-colors duration-200">
-            {property.title}
-          </h3>
-          <div className="flex items-center text-sm text-gray-600">
-            <StarIcon className="w-4 h-4 text-yellow-400 mr-1" />
-            <span>{property.ratings}</span>
-            <span className="ml-1">({property.reviews})</span>
-          </div>
-        </div>
-        
-        <div className="flex items-center text-gray-600 mb-3">
-          <MapPinIcon className="w-4 h-4 mr-2" />
-          <span className="text-sm">{property.location}</span>
-        </div>
-        
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center text-primary-600 font-bold text-lg">
-            <CurrencyRupeeIcon className="w-5 h-5 mr-1" />
-            {property.rent.toLocaleString()}
-            <span className="text-gray-500 text-sm font-normal ml-1">/month</span>
-          </div>
-          <div className="text-sm text-gray-600">
-            {property.bedrooms} BHK • {property.bathrooms} Bath
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap gap-2 mb-4">
-          {property.amenities.slice(0, 3).map((amenity) => (
-            <span
-              key={amenity}
-              className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
-            >
-              {amenity.replace('_', ' ')}
-            </span>
-          ))}
-          {property.amenities.length > 3 && (
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-              +{property.amenities.length - 3} more
-            </span>
-          )}
-        </div>
-        
-        <button
-          onClick={() => {
-            if (!isAuthenticated) {
-              toast.info('Please sign up to view property details');
-              navigate('/register');
-              return;
-            }
-            navigate(`/properties/${property.id}`);
-          }}
-          className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors duration-200 flex items-center justify-center"
-        >
-          <EyeIcon className="w-4 h-4 mr-2" />
-          {isAuthenticated ? 'View Details' : 'Sign Up to View'}
-        </button>
-      </div>
-    </motion.div>
-  );
+  const handleViewDetails = (propertyId) => {
+    if (!isAuthenticated) {
+      toast.info('Please login to continue');
+      navigate('/login', { state: { from: `/properties/${propertyId}` } });
+      return;
+    }
+    if (!hasPaid) {
+      toast.info('Please pay ₹199 to view property details');
+      navigate(`/properties/${propertyId}`);
+      return;
+    }
+    navigate(`/properties/${propertyId}`);
+  };
+
+  const handleFavorite = (propertyId) => {
+    if (!isAuthenticated) {
+      toast.info('Please sign up to save favorites');
+      navigate('/register');
+      return;
+    }
+    toast.success('Property added to favorites!');
+  };
+
+  const handleShare = (property) => {
+    if (navigator.share) {
+      navigator.share({
+        title: property.title,
+        text: `Check out this property: ${property.title}`,
+        url: `${window.location.origin}/properties/${property.id}`
+      }).then(() => toast.success('Property shared successfully!'))
+        .catch(() => toast.error('Error sharing property.'));
+    } else {
+      navigator.clipboard.writeText(`${window.location.origin}/properties/${property.id}`);
+      toast.info('Property link copied to clipboard!');
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Authentication Banner */}
-      {!isAuthenticated && (
-        <div className="bg-gradient-to-r from-primary-600 to-primary-700 text-white">
+    <div className="min-h-screen bg-earth-50 earth-texture">
+      {/* Payment Banner */}
+      {!hasPaid && isAuthenticated && (
+        <motion.div 
+          className="bg-gradient-to-r from-terracotta-600 via-ochre-500 to-terracotta-600 text-white shadow-2xl"
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ type: "spring", stiffness: 200 }}
+        >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center">
-                <LockClosedIcon className="w-6 h-6 mr-3" />
+                <motion.div
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                >
+                  <CreditCardIcon className="w-6 h-6 mr-3" />
+                </motion.div>
                 <div>
-                  <h3 className="font-semibold">Sign up to unlock full property details</h3>
-                  <p className="text-sm text-primary-100">Get owner contact info, detailed photos, and more</p>
+                  <h3 className="font-bold">Pay ₹199 to unlock all property details</h3>
+                  <p className="text-sm text-white/90">Get owner contact info, detailed photos, amenities and more</p>
                 </div>
               </div>
-              <button
+              <motion.button
+                onClick={handlePayment}
+                className="flex items-center bg-white text-terracotta-700 px-6 py-2.5 rounded-xl hover:bg-ochre-50 transition-all duration-200 font-bold shadow-2xl"
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <CreditCardIcon className="w-5 h-5 mr-2" />
+                Pay Now - ₹199
+              </motion.button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+      
+      {/* Authentication Banner */}
+      {!isAuthenticated && (
+        <motion.div 
+          className="bg-gradient-to-r from-forest-600 to-forest-700 text-white shadow-2xl"
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center">
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <LockClosedIcon className="w-6 h-6 mr-3" />
+                </motion.div>
+                <div>
+                  <h3 className="font-bold">Sign up to save favorites and contact owners</h3>
+                  <p className="text-sm text-white/90">Create your free account today!</p>
+                </div>
+              </div>
+              <motion.button
                 onClick={() => navigate('/register')}
-                className="flex items-center bg-white text-primary-600 px-6 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 font-medium"
+                className="flex items-center bg-white text-forest-700 px-6 py-2.5 rounded-xl hover:bg-forest-50 transition-all duration-200 font-bold shadow-2xl"
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
               >
                 <UserPlusIcon className="w-5 h-5 mr-2" />
                 Sign Up Now
-              </button>
+              </motion.button>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <motion.div 
+        className="bg-gradient-to-r from-white via-earth-50 to-white shadow-lg border-b-2 border-earth-200 pt-24"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Properties in Ranchi</h1>
-              <p className="text-gray-600 mt-1">
-                {properties.length} properties found
+              <motion.h1 
+                className="text-3xl font-black text-gray-900"
+                style={{
+                  textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                }}
+              >
+                Properties in <span className="text-transparent bg-clip-text bg-gradient-to-r from-terracotta-600 to-ochre-600">Ranchi</span>
+              </motion.h1>
+              <p className="text-gray-600 mt-1 font-medium">
+                {loading ? 'Loading...' : `${properties.length} properties found`}
               </p>
             </div>
-            <button
+            <motion.button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors duration-200"
+              className="flex items-center space-x-2 bg-gradient-to-r from-terracotta-600 to-terracotta-700 text-white px-5 py-2.5 rounded-xl hover:from-terracotta-700 hover:to-terracotta-800 transition-all duration-200 font-bold shadow-lg"
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
             >
               <FunnelIcon className="w-5 h-5" />
               <span>Filters</span>
-            </button>
+            </motion.button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid lg:grid-cols-4 gap-8">
-          {/* Filters Sidebar */}
-          <div className={`lg:col-span-1 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-            <div className="bg-white rounded-2xl shadow-sm p-6 sticky top-8">
+          {/* Filters Sidebar with 3D Effect */}
+          <motion.div 
+            className={`lg:col-span-1 ${showFilters ? 'block' : 'hidden lg:block'}`}
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <motion.div 
+              className="bg-white rounded-2xl shadow-2xl p-6 sticky top-8 border-2 border-earth-100"
+              whileHover={{ y: -2 }}
+              style={{
+                transformStyle: 'preserve-3d',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.05)',
+              }}
+            >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
-                <button
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <AdjustmentsHorizontalIcon className="w-5 h-5 text-terracotta-600" />
+                  Filters
+                </h2>
+                <motion.button
                   onClick={clearFilters}
-                  className="text-sm text-primary-600 hover:text-primary-700"
+                  className="text-sm text-terracotta-600 hover:text-terracotta-700 font-semibold"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                 >
                   Clear All
-                </button>
+                </motion.button>
               </div>
 
               {/* Search */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Search</label>
                 <div className="relative">
-                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-terracotta-500" />
                   <input
                     type="text"
                     value={filters.search}
                     onChange={(e) => handleFilterChange('search', e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full pl-10 pr-4 py-2.5 border-2 border-earth-200 rounded-xl focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 transition-all duration-200 shadow-sm"
                     placeholder="Search properties..."
                   />
                 </div>
@@ -379,11 +329,11 @@ const PropertyList = () => {
 
               {/* Property Type */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Property Type</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Property Type</label>
                 <select
                   value={filters.type}
                   onChange={(e) => handleFilterChange('type', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2.5 border-2 border-earth-200 rounded-xl focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 transition-all duration-200 shadow-sm bg-white"
                 >
                   <option value="">All Types</option>
                   {PROPERTY_TYPES.map((type) => (
@@ -396,11 +346,11 @@ const PropertyList = () => {
 
               {/* Area */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Area</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Area</label>
                 <select
                   value={filters.area}
                   onChange={(e) => handleFilterChange('area', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2.5 border-2 border-earth-200 rounded-xl focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 transition-all duration-200 shadow-sm bg-white"
                 >
                   <option value="">All Areas</option>
                   {RANCHI_AREAS.map((area) => (
@@ -413,11 +363,11 @@ const PropertyList = () => {
 
               {/* Budget */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Max Budget</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Max Budget</label>
                 <select
                   value={filters.budget}
                   onChange={(e) => handleFilterChange('budget', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2.5 border-2 border-earth-200 rounded-xl focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 transition-all duration-200 shadow-sm bg-white"
                 >
                   <option value="">Any Budget</option>
                   {BUDGET_RANGES.map((range) => (
@@ -430,11 +380,11 @@ const PropertyList = () => {
 
               {/* Furnishing */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Furnishing</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Furnishing</label>
                 <select
                   value={filters.furnished}
                   onChange={(e) => handleFilterChange('furnished', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2.5 border-2 border-earth-200 rounded-xl focus:ring-2 focus:ring-terracotta-500 focus:border-terracotta-500 transition-all duration-200 shadow-sm bg-white"
                 >
                   <option value="">Any Furnishing</option>
                   {FURNISHING_TYPES.map((type) => (
@@ -444,44 +394,54 @@ const PropertyList = () => {
                   ))}
                 </select>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
-          {/* Properties Grid */}
+          {/* Properties Grid with 3D Layout */}
           <div className="lg:col-span-3">
             {loading ? (
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="bg-white rounded-2xl shadow-sm overflow-hidden animate-pulse">
-                    <div className="h-48 bg-gray-200"></div>
-                    <div className="p-6 space-y-4">
-                      <div className="h-4 bg-gray-200 rounded"></div>
-                      <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-                      <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-                    </div>
-                  </div>
-                ))}
+                <SkeletonLoader type="card" count={6} />
               </div>
             ) : properties.length > 0 ? (
-              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {properties.map((property) => (
-                  <PropertyCard key={property.id} property={property} />
+              <motion.div 
+                className="grid md:grid-cols-2 xl:grid-cols-3 gap-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5 }}
+              >
+                {properties.map((property, index) => (
+                  <motion.div
+                    key={property.id}
+                    initial={{ opacity: 0, y: 30, rotateX: -10 }}
+                    animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                    transition={{ 
+                      delay: index * 0.1,
+                      duration: 0.5,
+                      type: "spring",
+                      stiffness: 100
+                    }}
+                    style={{ transformStyle: 'preserve-3d' }}
+                  >
+                    <PropertyCard
+                      property={property}
+                      onViewDetails={handleViewDetails}
+                      onFavorite={handleFavorite}
+                      onShare={handleShare}
+                      hasPaid={hasPaid}
+                      isAuthenticated={isAuthenticated}
+                    />
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             ) : (
-              <div className="text-center py-12">
-                <HomeIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No Properties Found</h3>
-                <p className="text-gray-600 mb-6">
-                  Try adjusting your filters or search criteria
-                </p>
-                <button
-                  onClick={clearFilters}
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700 transition-colors duration-200"
-                >
-                  Clear Filters
-                </button>
-              </div>
+              <EmptyState
+                icon={HomeIcon}
+                title="No Properties Found"
+                description="Try adjusting your filters or search criteria to find more properties."
+                action={clearFilters}
+                actionLabel="Clear Filters"
+              />
             )}
           </div>
         </div>
